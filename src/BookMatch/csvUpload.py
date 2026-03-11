@@ -1,19 +1,15 @@
 import pandas as pd
-from Library import Library
+from library import Library
 
 class CSVparser:
-    def __init__(self, csv_path: str):
-        self.CSV_ID = Library.generateCSV_ID()
+    def __init__(self, username: str, email: str, csv_path: str):
         self.csv_path = csv_path
         self.csvDataFrame = pd.read_csv(csv_path)
-
-    def fetch
-
-    
-
+        self.library = Library()
+        self.CSV_ID = self.library.add_user(username, email)
     
 #tests      
-parser = CSVParser("goodreads_library_export.csv")
+parser = CSVparser("abc", "xyz", "goodreads_library_export.csv")
 df = parser.csvDataFrame
 print(df.head())
 print(df.columns)
