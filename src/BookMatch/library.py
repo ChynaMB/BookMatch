@@ -86,8 +86,10 @@ class Library:
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS bookData (
             work TEXT PRIMARY KEY,
+            title TEXT,
             subjects TEXT,  
-            average_rating REAL,              
+            average_rating REAL,   
+            rating_count INTEGER,           
             embedding BLOB
             bookData_id INTEGER PRIMARY KEY AUTOINCREMENT
         )
