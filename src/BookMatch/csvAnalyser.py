@@ -12,13 +12,13 @@ class CSVAnalyser:
         self.csvDataFrame = pd.read_csv(csv_path)
 
         self.library = Library()
-        self.userID = self.library.add_user()
+        self.userID = self.library.addUser()
 
         self.openLibraryURL = "https://openlibrary.org"
         
         self.fiveStarWeight = 2
         self.fourStarWeight = 1
-        
+
     def getWorksFromISBNS(self, ISBNS: list) -> tuple[list, list]:
         """Given a list of ISBNs, return a list of works (work ID)
         we use wworks instead of isbn because some books have multiple editions with different ISBNs, 
@@ -47,12 +47,19 @@ class CSVAnalyser:
         return list(works), failed_isbns
     
     def getSubjectsFromWorks(self, works: list) -> tuple[dict, list]:
-        """Given a list of works, return a dictionary of workID to subjects"""
+        """Given a list of works, return a dictionary of workID to subjects
+        fetch from library.db bookData first, then API call if not in database"""
         work_subjects = {} #key: workID, value: list of subjects
         failed_works = []
 
         print(f"Getting subjects for works")
         for work in works:
+            # First, try to fetch from the database
+            subjects = self.library.getSubjectsFromBookData(work)
+            if subjects is not None:
+                work_subjects[work] = subjects
+                continue
+
             url = f"{self.openLibraryURL}{work}.json"
             response = requests.get(url)
             if response.status_code != 200:
@@ -70,7 +77,8 @@ class CSVAnalyser:
                 failed_works.append(work)
 
         return work_subjects, failed_works
-    
+
+
     def getSubjectGraph(self, work_subjects: dict, weightMultiplier: float) -> nx.Graph:
         """
         Given a dictionary of workID to subjects, return/update a graph showing two thing:
@@ -134,13 +142,24 @@ class CSVAnalyser:
         return likedAuthors
 
     #TODO: createBook and createUserProfile can be done in parallel with threading since they are independent of each other
-    def createBook(self, works, subjects):
+    def createBookShelf(self, work_subjects: dict) -> list:
         """Given a list of works, check library.db to see if we have a submition for each work
         if not, create a Book for it so it can be stored in the library"""
-        for work in works:
-            #check if book already exists in library.db
-            #if not, create a new Book and store it in library.db
-            pass
+        bookShelf = []
+        for work in work_subjects.keys():
+            if self.library.isBookInLibrary(work): #check if book is in library.db
+                continue
+            
+            bookShelf.append(Book(work, work_subjects[work]))
+        return bookShelf
+    
+    def updateBookShelf(self, bookShelf, work, subjects):
+        """Given a bookShelf, update the bookShelf with a new book if it is not already in the library"""
+        if self.library.isBookInLibrary(work):
+            return bookShelf
+        
+        bookShelf.append(Book(work, subjects))
+        return bookShelf
 
     def createUserProfile(self) -> UserProfile:
         """Create a user profile based on the subject graph"""
@@ -148,18 +167,20 @@ class CSVAnalyser:
         fourStarISBNS = self.csvDataFrame[self.csvDataFrame['My Rating'] == 4]
 
         fiveStarWorks, failed_5star_ISBNS = self.getWorksFromISBNS(fiveStarISBNS['ISBN'].tolist())
-        fiveStarSubjects, failed_5star_works = self.getSubjectsFromWorks(fiveStarWorks)
-        subjectGraph = self.getSubjectGraph(fiveStarSubjects, self.fiveStarWeight) 
+        fiveStarWorkSubjects, failed_5star_works = self.getSubjectsFromWorks(fiveStarWorks)
+        subjectGraph = self.getSubjectGraph(fiveStarWorkSubjects, self.fiveStarWeight) 
         fiveStarAuthors = fiveStarISBNS['Author'].tolist()
         likedAuthors = self.getLikedAuthors(fiveStarAuthors, self.fiveStarWeight)
+        bookShelf = self.createBookShelf(fiveStarWorkSubjects)
 
-        
         fourStarWorks, failed_4star_ISBNS = self.getWorksFromISBNS(fourStarISBNS['ISBN'].tolist())
-        fourStarSubjects, failed_4star_works = self.getSubjectsFromWorks(fourStarWorks)
-        for subjects in fourStarSubjects.values():
+        fourStarWorkSubjects, failed_4star_works = self.getSubjectsFromWorks(fourStarWorks)
+        for subjects in fourStarWorkSubjects.values():
             subjectGraph = self.updateSubjectGraph(subjects, subjectGraph, self.fourStarWeight)
         fourStarAuthors = fourStarISBNS['Author'].tolist()
         for author in fourStarAuthors:
             likedAuthors = self.updateLikedAuthors(author, likedAuthors, self.fourStarWeight)
+        for work, subjects in fourStarWorkSubjects.items():
+            bookShelf = self.updateBookShelf(bookShelf, work, subjects)
         
-        return UserProfile(self.userID, fiveStarWorks, fourStarWorks, subjectGraph, likedAuthors)
+        return UserProfile(self.userID, bookShelf, fiveStarWorks, fourStarWorks, subjectGraph, likedAuthors)

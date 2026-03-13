@@ -9,11 +9,32 @@ class Library:
         self.createuserProfileTable()
         self.createBookDataTable()
 
-    #Add a new user to the users table and return the generated user_id
-    def add_user(self):
+    #methods to add to database
+    def addUser(self):
         self.cursor.execute("INSERT INTO users DEFAULT VALUES")
         self.conn.commit()
         return self.cursor.lastrowid  #return the generated user_id
+
+    def addBookData(self, workID, title, average_rating, subjects, embedding):
+        self.cursor.execute("""
+        INSERT OR REPLACE INTO bookData (workID, title, average_rating, subjects, embedding)
+        VALUES (?, ?, ?, ?, ?)
+        """, (workID, title, average_rating, subjects, embedding))
+        self.conn.commit()
+
+
+    #methods to get data from database
+    def getSubjectsFromBookData(self, work):
+        self.cursor.execute("SELECT subjects FROM bookData WHERE work = ?", (work,))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
+
+
+    #methods to search database
+    def isBookInLibrary(self, work):
+        self.cursor.execute("SELECT 1 FROM bookData WHERE work = ?", (work,))
+        return self.cursor.fetchone() is not None
+
 
     #Table creation methods
     def createUserTable(self):
@@ -64,15 +85,11 @@ class Library:
     def createBookDataTable(self):
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS bookData (
-            bookID TEXT PRIMARY KEY,
-            Title TEXT,
-            Author TEXT,
-            AuthorLF TEXT,
-            AdditionalAuthors TEXT,
-            ISBN TEXT,
-            ISBN13 TEXT,
-            AverageRating REAL,
-            NumOfPages INTEGER
+            work TEXT PRIMARY KEY,
+            subjects TEXT,  
+            average_rating REAL,              
+            embedding BLOB
+            bookData_id INTEGER PRIMARY KEY AUTOINCREMENT
         )
         """)
         self.conn.commit()
