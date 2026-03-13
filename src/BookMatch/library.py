@@ -9,11 +9,9 @@ class Library:
         self.createuserProfileTable()
         self.createBookDataTable()
 
-    def add_user(self, username:str, email:str):
-        self.cursor.execute("""
-            INSERT INTO users (username, email) 
-            VALUES (?, ?)""", (username, email)
-        )
+    #Add a new user to the users table and return the generated user_id
+    def add_user(self):
+        self.cursor.execute("INSERT INTO users DEFAULT VALUES")
         self.conn.commit()
         return self.cursor.lastrowid  #return the generated user_id
 
@@ -22,8 +20,6 @@ class Library:
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            email TEXT UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
