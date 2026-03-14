@@ -47,20 +47,23 @@ class CSVAnalyser:
 
         return list(works)
     
-    def getSubjectsFromWorks(self, works: list[tuple[str, str]]) -> dict:
+    def getBookInfo(self, works: list[tuple[str, str]]) -> dict[tuple[str, str], tuple[list[str], str, str]]:
         """Given a list of works, return a dictionary of workID to subjects
-        fetch from library.db bookData first, then API call if not in database"""
-        work_subjects = {} #key: workID, value: list of subjects
-        failed_works = []
+        fetch from library.db bookData first, then API call if not in database
+        also return book info: title and author(s)"""
+        book_info = {} #key: (isbn, work), value: (title, author, subjects) 
 
         print(f"Getting subjects for works")
         for isbn, work in works:
             # First, try to fetch from the database
             subjects = self.library.getSubjectsFromBookData(work)
+            title = self.library.getTitleFromBookData(work)
+            author = self.library.getAuthorFromBookData(work)
             if subjects is not None:
-                work_subjects[work] = subjects
+                book_info[(isbn, work)] = (subjects, title, author)
                 continue
 
+            #not in database, fetch from API
             url = f"{self.openLibraryURL}{work}.json"
             response = requests.get(url)
             if response.status_code != 200:
@@ -69,17 +72,30 @@ class CSVAnalyser:
                 continue
             
             data = response.json()
-            
+
             if "subjects" in data:
                 subjects = data["subjects"]
-                work_subjects[(isbn, work)] = subjects
             else:
                 print(f"No subjects found for work {work}")
-                self.failed_ISBNS.append(isbn)
+                subjects = None
 
-        return work_subjects
+            if "title" in data:
+                title = data["title"]
+            else:
+                print(f"No title found for work {work}")
+                title = None
 
-    def getSubjectGraph(self, work_subjects: dict, weightMultiplier: float) -> nx.Graph:
+            if "authors" in data and len(data["authors"]) > 0:
+                author = data["authors"][0]["name"]
+            else:
+                print(f"No author found for work {work}")
+                author = None
+            
+            book_info[(isbn, work)] = (subjects, title, author)
+            
+        return book_info
+
+    def getSubjectGraph(self, book_info: dict, weightMultiplier: float) -> nx.Graph:
         """
         Given a dictionary of workID to subjects, return/update a graph showing two thing:
         1) the frequency of each subject amongst all works
@@ -89,7 +105,7 @@ class CSVAnalyser:
         
         subjectGraph = nx.Graph()
 
-        for subjects in work_subjects.values():
+        for subjects, title, author in book_info.values():
             #increment frequency for each subject
             for subj in subjects:
                 if subjectGraph.has_node(subj):
@@ -141,23 +157,22 @@ class CSVAnalyser:
             likedAuthors[author] = weighting
         return likedAuthors
 
-    def createBookShelf(self, work_subjects: dict) -> list:
+    def createBookShelf(self, book_info: dict) -> list:
         """Given a list of works, check library.db to see if we have a submition for each work
         if not, create a Book for it so it can be stored in the library"""
         bookShelf = []
-        for (isbn, work) in work_subjects.keys():
+        for (isbn, work) in book_info.keys():
             if self.library.isBookInLibrary(work): #check if book is in library.db
                 continue
-            
-            bookShelf.append(Book(work, isbn, work_subjects[(isbn, work)]))
+            title, author, subjects = book_info[(isbn, work)]
+            bookShelf.append(Book(work, isbn, title, author, subjects, self.library))
         return bookShelf
     
-    def updateBookShelf(self, bookShelf, work, isbn, subjects):
+    def updateBookShelf(self, bookShelf, work, isbn, subjects, title, author):
         """Given a bookShelf, update the bookShelf with a new book if it is not already in the library"""
         if self.library.isBookInLibrary(work):
             return bookShelf
-        
-        bookShelf.append(Book(work, isbn, subjects))
+        bookShelf.append(Book(work, isbn, title, author, subjects, self.library))
         return bookShelf
     
     def createUserProfile(self) -> UserProfile:
@@ -166,20 +181,21 @@ class CSVAnalyser:
         fourStarISBNS = self.csvDataFrame[self.csvDataFrame['My Rating'] == 4]
 
         fiveStarWorks = self.getWorksFromISBNS(fiveStarISBNS['ISBN'].tolist())
-        fiveStarWorkSubjects = self.getSubjectsFromWorks(fiveStarWorks)
-        subjectGraph = self.getSubjectGraph(fiveStarWorkSubjects, self.fiveStarWeight) 
+        fiveStarBookInfo = self.getBookInfo(fiveStarWorks)
+
+        subjectGraph = self.getSubjectGraph(fiveStarBookInfo, self.fiveStarWeight) 
         fiveStarAuthors = fiveStarISBNS['Author'].tolist()
         likedAuthors = self.getLikedAuthors(fiveStarAuthors, self.fiveStarWeight)
-        bookShelf = self.createBookShelf(fiveStarWorkSubjects)
+        bookShelf = self.createBookShelf(fiveStarBookInfo)
 
         fourStarWorks = self.getWorksFromISBNS(fourStarISBNS['ISBN'].tolist())
-        fourStarWorkSubjects = self.getSubjectsFromWorks(fourStarWorks)
-        for subjects in fourStarWorkSubjects.values():
+        fourStarBookInfo = self.getBookInfo(fourStarWorks)
+        for subjects, title, author in fourStarBookInfo.values():
             subjectGraph = self.updateSubjectGraph(subjects, subjectGraph, self.fourStarWeight)
         fourStarAuthors = fourStarISBNS['Author'].tolist()
         for author in fourStarAuthors:
             likedAuthors = self.updateLikedAuthors(author, likedAuthors, self.fourStarWeight)
-        for (isbn, work), subjects in fourStarWorkSubjects.items():
-            bookShelf = self.updateBookShelf(bookShelf, work, isbn, subjects)
+        for (isbn, work), (title, author, subjects) in fourStarBookInfo.items():
+            bookShelf = self.updateBookShelf(bookShelf, work, isbn, subjects, title, author)
         
         return UserProfile(self.userID, bookShelf, fiveStarWorks, fourStarWorks, subjectGraph, likedAuthors)
