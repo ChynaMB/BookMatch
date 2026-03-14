@@ -1,8 +1,6 @@
 import requests
+import json
 from sentence_transformers import SentenceTransformer
-
-# Mini model is fast and good enough
-model = SentenceTransformer("all-MiniLM-L6-v2")
 
 #hashed out all hardcover API code for now since - seems a little unreliable and requires an API key. 
 #Can add back in later if we want to use it as a source for ratings and embeddings.
@@ -17,12 +15,16 @@ class Book:
         self.description = self.getDescription()
         self.averageRating = self.updateRating()[0]
         self.ratingCount = self.updateRating()[1]
-        self.embedding = self.createEmbedding()
-        self.bookData_id = self.library.addBookData(self.work, self.title, self.author, self.averageRating, self.subjects, self.embedding)
+        self.bookVectorEmbedding = self.createBookVectorEmbedding()
+        #self.bookStringEmbedding = json.dumps(self.bookVectorEmbedding.tolist()) #convert numpy array to list, then to string for database storage
+        
+        self.bookData_id = self.library.addBookData(self.work, self.title, self.author, self.averageRating, self.subjects, self.bookVectorEmbedding)
 
         self.openLibraryURL = "https://openlibrary.org"
         self.googleBooksURL = "https://www.googleapis.com/books/v1/volumes"
         self.hardcoverURL = "https://api.hardcover.io/v1/books"
+
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def updateRating(self) -> tuple:
         """using ISBN, fetch average rating and rating count from open library API, google books API, 
@@ -90,12 +92,12 @@ class Book:
 
         return None
 
-    def createEmbedding(self):
+    def createBookVectorEmbedding(self):
         """using the three open source APIs, fetch data on the book and create a vector embedding"""
-        text_for_embedding = f"""
+        textForEmbedding = f"""
         Title: {self.title}
         Author: {self.author}
         Subjects: {', '.join(self.subjects)}
         Description: {self.description}
         """
-        return model.encode(text_for_embedding)
+        return self.model.encode(textForEmbedding)

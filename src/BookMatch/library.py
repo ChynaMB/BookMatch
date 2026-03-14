@@ -29,6 +29,16 @@ class Library:
             raise Exception("Failed to add book data to database")
         return self.cursor.lastrowid  #return the generated bookData_id
 
+    def addUserProfile(self, user_id, five_star_works, four_star_works, liked_authors, vector_embedding, matches) -> int:
+        self.cursor.execute("""
+        INSERT OR REPLACE INTO userProfiles (user_id, five_star_works, four_star_works, liked_authors, vector_embedding, matches)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, five_star_works, four_star_works, liked_authors, vector_embedding, matches))
+        self.conn.commit()
+
+        if self.cursor.lastrowid is None:
+            raise Exception("Failed to add user profile to database")
+        return self.cursor.lastrowid  #return the generated profile_id
 
     #methods to get data from database
     def getSubjectsFromBookData(self, work):
@@ -91,6 +101,9 @@ class Library:
         CREATE TABLE IF NOT EXISTS userProfiles (
             profile_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER UNIQUE,
+            five_star_works TEXT,
+            four_star_works TEXT,
+            liked_authors TEXT,
             vector BLOB,
             matches TEXT,
             FOREIGN KEY (user_id) REFERENCES users(user_id)
