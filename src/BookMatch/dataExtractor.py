@@ -1,9 +1,11 @@
 import pandas as pd
 import requests
-from itertools import combinations
-import networkx as nx
+import numpy as np
 from userProfile import UserProfile
 from book import Book
+from itertools import combinations
+import networkx as nx
+from collections import Counter
 
 class DataExtractor:
     def __init__(self, csv_path: str, library):
@@ -19,6 +21,7 @@ class DataExtractor:
 
         self.fiveStarWeight = 2
         self.fourStarWeight = 1
+        self.ceilingFactor = 1.5 #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
 
     def fetchWorksFromISBNS(self, ISBNS: list) ->list[tuple[str, str]]:
         """Given a list of ISBNs, return a list of works (work ID)
@@ -64,7 +67,7 @@ class DataExtractor:
         if ISBNS is None or len(ISBNS) == 0:
             raise ValueError("ISBNS list cannot be empty")
 
-        book_info = {} #key: (isbn, work), value: (title, author, subjects, description, averageRating, ratingCount) 
+        bookInfo = {} #key: (isbn, work), value: (title, author, subjects, description, averageRating, ratingCount) 
         #Get workIDs from ISBNs 
         ISBN_workIDS = self.fetchWorksFromISBNS(ISBNS)
         #Check database for book data using workIDs, if not in database, fetch from APIs and add to database
@@ -84,9 +87,9 @@ class DataExtractor:
                 #add book data to database
                 self.library.addBookData(workID, title, author, averageRating, subjects, description)
 
-            book_info[(isbn, workID)] = (title, author, subjects, description, averageRating, ratingCount)
+            bookInfo[(isbn, workID)] = (title, author, subjects, description, averageRating, ratingCount)
 
-        return book_info
+        return bookInfo
 
     def fetchBookDataFromOpenLibrary(self, workID):
         """Given a workID, fetch the book title, author and subjects from the open library API"""
@@ -151,50 +154,7 @@ class DataExtractor:
             totalRatingCount = None
 
         return averageRating, totalRatingCount
-
-    def getSubjectGraph(self, book_info: dict, weightMultiplier: float) -> nx.Graph:
-        """
-        Given a dictionary of workID to subjects, return/update a graph showing two thing:
-        1) the frequency of each subject amongst all works
-        2) The relationships between subjects for each work, where the weight of the edge is weighted 
-            by their occurence together in the same work
-        """
-        
-        subjectGraph = nx.Graph()
-
-        for subjects, title, author in book_info.values():
-            #increment frequency for each subject
-            for subj in subjects:
-                if subjectGraph.has_node(subj):
-                    subjectGraph.nodes[subj]['frequency'] += weightMultiplier
-                else:
-                    subjectGraph.add_node(subj, frequency=1)
-
-            #increment edge weight for each pair of subjects that occur together
-            for subj1, subj2 in combinations(subjects, 2):
-                if subjectGraph.has_edge(subj1, subj2):
-                    subjectGraph[subj1][subj2]['weight'] += weightMultiplier
-                else:
-                    subjectGraph.add_edge(subj1, subj2, weight=weightMultiplier)
-
-        return subjectGraph
-    
-    def updateSubjectGraph(self, subjects, subjectGraph: nx.Graph, weightMultiplier: float) -> nx.Graph:
-        """Given a list of subjects for a work, update the subject graph with the new subjects and their relationships"""
-        for subj in subjects:
-            if subjectGraph.has_node(subj):
-                subjectGraph.nodes[subj]['frequency'] += weightMultiplier
-            else:
-                subjectGraph.add_node(subj, frequency=1)
-
-        for subj1, subj2 in combinations(subjects, 2):
-            if subjectGraph.has_edge(subj1, subj2):
-                subjectGraph[subj1][subj2]['weight'] += weightMultiplier
-            else:
-                subjectGraph.add_edge(subj1, subj2, weight=weightMultiplier)
-
-        return subjectGraph
-
+#TODO: update liked authors methods to combine them into one
     def getLikedAuthors(self, authors, weighting):
         """Return a dictionairy of liked authors based on the frequency of authors in the 4 and 5 star ratings"""
         authorFrequency = {}
@@ -214,14 +174,14 @@ class DataExtractor:
             likedAuthors[author] = weighting
         return likedAuthors
 
-    def createBookShelf(self, book_info: dict) -> list:
+    def createBookShelf(self, bookInfo: dict) -> list:
         """Given a list of works, check library.db to see if we have a submition for each work
         if not, create a Book for it so it can be stored in the library"""
         bookShelf = []
-        for (isbn, workID) in book_info.keys():
+        for (isbn, workID) in bookInfo.keys():
             if self.library.isBookInLibrary(workID): #check if book is in library.db
                 continue
-            title, author, subjects, description, averageRating, ratingCount = book_info[(isbn, workID)]
+            title, author, subjects, description, averageRating, ratingCount = bookInfo[(isbn, workID)]
             bookShelf.append(Book(workID, isbn, title, author, subjects, description, averageRating, ratingCount, self.library))
         return bookShelf
     
@@ -232,6 +192,110 @@ class DataExtractor:
         bookShelf.append(Book(workID, isbn, title, author, subjects, description, averageRating, ratingCount, self.library))
         return bookShelf
     
+    #TODO: Correct the naming practices and logic of this method
+    def createSubjectGraph(self, bookInfo: dict, weightMultiplier) -> nx.Graph:
+        """
+        Build a subject graph from a user's book subjects.
+        - Nodes: subjects with 'frequency' attribute (capped)
+        - Edges: co-occurrence of subjects in the same book (capped)
+        - Ceiling calculated as mean + k * standard deviation
+        """
+        
+        nodeFrequency = Counter()                    # Counter to track how many times each subject appears across all books
+        edgeWeights = Counter()        # Counter to track co-occurrence counts for each pair of subjects
+
+        # Step 1: collect frequencies and edge co-occurrences
+        for (_, _), (_, _, subjects, _, _, _) in bookInfo.items():
+            # Extract and clean subjects for this book:
+            # strip whitespace, convert to lowercase, ignore empty strings
+            cleaned = [subject.strip().lower() for subject in subjects if subject and subject.strip()]
+            
+            if len(cleaned) < 1:                 # Skip this book if no subjects remain after cleaning
+                continue
+
+            # Node frequency: increment count of each subject by 1 for this book
+            for subject in cleaned:
+                nodeFrequency[subject] += weightMultiplier
+
+            # Edge weights: for each unique pair of subjects in this book, increment co-occurrence count
+            for subject1, subject2 in combinations(cleaned, 2):
+                edge = tuple(sorted((subject1, subject2)))   # Sort subjects to ensure edge is undirected (s1-s2 same as s2-s1)
+                edgeWeights[edge] += weightMultiplier
+
+        # Step 2: compute dynamic ceilings
+        if nodeFrequency:
+            frequency = np.array(list(nodeFrequency.values())) # Convert frequencies to numpy array for mean/std calculation
+            meanFrequency = frequency.mean() # Calculate mean frequency of subjects
+            frequencyStandardDeviation = frequency.std()# Calculate standard deviation of frequencies
+            maxNodeFreq = meanFrequency + self.ceilingFactor * frequencyStandardDeviation  # node frequency ceiling
+        else:
+            maxNodeFreq = 0 #If there are no nodes, set ceiling to 0 to avoid adding any nodes
+
+        if edgeWeights:
+            edgeOccurences = np.array(list(edgeWeights.values())) # Convert edge co-occurrence counts to numpy array for mean/std calculation
+            meanEdgeOccurence = edgeOccurences.mean() # Calculate mean co-occurrence count for edges
+            edgeOccurenceStandardDeviation = edgeOccurences.std() # Calculate standard deviation of edge co-occurrence counts
+            maxEdgeWeight = meanEdgeOccurence + self.ceilingFactor * edgeOccurenceStandardDeviation  # edge weight ceiling
+        else:
+            maxEdgeWeight = 0 # If there are no edges, set ceiling to 0 to avoid adding any edges
+
+        # Step 3: build the graph with capped nodes and edges
+        subjectGraph = nx.Graph()
+
+        # Add nodes with capped frequencies
+        for subject, freq in nodeFrequency.items():
+            capped_freq = min(freq, maxNodeFreq)   # apply ceiling
+            subjectGraph.add_node(subject, frequency=capped_freq)
+
+        # Add edges with capped weights
+        for (subject1, subject2), w in edgeWeights.items():
+            if subject1 in subjectGraph.nodes and subject2 in subjectGraph.nodes:
+                capped_w = min(w, maxEdgeWeight)  # apply ceiling
+                subjectGraph.add_edge(subject1, subject2, weight=capped_w)
+
+        return subjectGraph
+
+    def addSubjectsToSubjectGraph(self, subjectGraph, subjects, weightMultiplier):
+        """Update an existing subject graph with subjects from a new book"""
+
+        # Clean subjects: remove whitespace, lowercase, remove duplicates
+        cleaned = list({s.strip().lower() for s in subjects if s and s.strip()})
+
+        # If no valid subjects remain, nothing to update
+        if not cleaned:
+            return subjectGraph
+
+        # ---- Step 1: update nodes ----
+        for subject in cleaned:
+            if subjectGraph.has_node(subject):
+                subjectGraph.nodes[subject]['frequency'] += weightMultiplier
+            else:
+                subjectGraph.add_node(subject, frequency=weightMultiplier)
+
+        # ---- Step 2: update edges ----
+        for subject1, subject2 in combinations(cleaned, 2):
+            if subjectGraph.has_edge(subject1, subject2):
+                subjectGraph[subject1][subject2]['weight'] += weightMultiplier
+            else:
+                subjectGraph.add_edge(subject1, subject2, weight=weightMultiplier)
+
+        # ---- Step 3: recompute ceilings using updated graph ----
+        nodeFrequencies = np.array([data['frequency'] for _, data in subjectGraph.nodes(data=True)])
+        edgeWeights = np.array([data['weight'] for _, _, data in subjectGraph.edges(data=True)])
+
+        maxNodeFreq = nodeFrequencies.mean() + self.ceilingFactor * nodeFrequencies.std() if len(nodeFrequencies) else 0
+        maxEdgeWeight = edgeWeights.mean() + self.ceilingFactor * edgeWeights.std() if len(edgeWeights) else 0
+
+        # ---- Step 4: apply caps ----
+        for node, data in subjectGraph.nodes(data=True):
+            data['frequency'] = min(data['frequency'], maxNodeFreq)
+
+        for u, v, data in subjectGraph.edges(data=True):
+            data['weight'] = min(data['weight'], maxEdgeWeight)
+
+        return subjectGraph
+
+
     def createUserProfile(self) -> UserProfile:
         """Create a user profile based on the subject graph"""
         fiveStarISBNS = self.csvDataFrame[self.csvDataFrame['My Rating'] == 5]
@@ -249,7 +313,9 @@ class DataExtractor:
         for author in fourStarAuthors:
             likedAuthors = self.updateLikedAuthors(author, likedAuthors, self.fourStarWeight)
         
-        subjectGraph = self.getSubjectGraph(fiveStarBookInfo, self.fiveStarWeight) 
+        subjectGraph = self.createSubjectGraph(fiveStarBookInfo, self.fiveStarWeight)
+        for bookInfo in FourStarBookInfo.values():
+            _, _, subjects, _, _, _ = bookInfo
+            subjectGraph = self.addSubjectsToSubjectGraph(subjectGraph, subjects, self.fourStarWeight)
         
-        
-        return UserProfile(self.userID, fiveStarBookshelf, fourStarBookshelf, subjectGraph, likedAuthors, self.library)
+        return UserProfile(self.userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, subjectGraph, self.library)

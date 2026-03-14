@@ -1,11 +1,11 @@
 from library import Library
-from BookMatch.dataExtractor import CSVAnalyser
+from dataExtractor import DataExtractor
 
 class Recommender:
     def __init__(self, csv_path:str):
         self.library = Library()
-        self.csvAnalyser = CSVAnalyser(csv_path, self.library)
-        self.userProfile = self.csvAnalyser.createUserProfile()
+        self.dataExtractor = DataExtractor(csv_path, self.library)
+        self.userProfile = self.dataExtractor.createUserProfile()
 
     #compare user profile embedding with book embeddings in database to generate match scores
     #compare user profile embedding with other user profile embedding -> generate match score
