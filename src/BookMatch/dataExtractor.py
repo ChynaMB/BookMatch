@@ -19,8 +19,8 @@ class DataExtractor:
         self.googleBooksURL = "https://www.googleapis.com/books/v1/volumes"
         self.hardcoverURL = "https://api.hardcover.io/v1/books"
 
-        self.fiveStarWeight = 2
-        self.fourStarWeight = 1
+        self.fiveStarWeight = 1
+        self.fourStarWeight = 0.7
         self.ceilingFactor = 1.5 #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
 
     def fetchWorksFromISBNS(self, ISBNS: list) ->list[tuple[str, str]]:
@@ -318,4 +318,5 @@ class DataExtractor:
             _, _, subjects, _, _, _ = bookInfo
             subjectGraph = self.addSubjectsToSubjectGraph(subjectGraph, subjects, self.fourStarWeight)
         
-        return UserProfile(self.userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, subjectGraph, self.library)
+        return UserProfile(self.userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, 
+                           subjectGraph, self.fiveStarWeight, self.fourStarWeight, self.library)

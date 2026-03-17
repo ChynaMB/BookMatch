@@ -49,5 +49,8 @@ class Book:
 
     def getRatingCount(self):
         return self.ratingCount
+    
+    def getBookVectorEmbedding(self):
+        return self.bookVectorEmbedding
 
     
