@@ -295,7 +295,6 @@ class DataExtractor:
 
         return subjectGraph
 
-
     def createUserProfile(self) -> UserProfile:
         """Create a user profile based on the subject graph"""
         fiveStarISBNS = self.csvDataFrame[self.csvDataFrame['My Rating'] == 5]

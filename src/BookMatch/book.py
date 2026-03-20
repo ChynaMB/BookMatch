@@ -3,8 +3,8 @@ from sentence_transformers import SentenceTransformer
 #hashed out all hardcover API code for now since - seems a little unreliable and requires an API key. 
 #Can add back in later if we want to use it as a source for ratings and embeddings.
 class Book:
-    def __init__(self, work, ISBN, title, author, subjects, description, averageRating, ratingCount, library):
-        self.work = work
+    def __init__(self, workID, ISBN, title, author, subjects, description, averageRating, ratingCount, library):
+        self.workID = workID
         self.ISBN = ISBN
         self.title = title
         self.author = author
@@ -17,7 +17,7 @@ class Book:
         
         self.library = library
         #add book data to database and get the bookData_id for this book
-        self.bookData_id = self.library.addBookData(self.work, self.title, self.author, self.averageRating, self.subjects, self.bookVectorEmbedding)
+        self.bookDataID = self.library.addBookData(self.workID, self.title, self.author, self.averageRating, self.subjects, self.bookVectorEmbedding)
 
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -32,6 +32,12 @@ class Book:
         return self.model.encode(textForEmbedding)
 
     #getter methods
+    def getWorkID(self):
+        return self.workID
+    
+    def getISBN(self):
+        return self.ISBN
+
     def getTitle(self):
         return self.title
 

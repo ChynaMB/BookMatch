@@ -9,6 +9,9 @@ class Library:
         self.createUserProfileTable()
         self.createBookDataTable()
 
+    def closeConnection(self):
+        self.conn.close()
+
     #methods to update data entries in database
     def updateUserProfileMatches(self, userProfileID, matches):
         self.cursor.execute("""
@@ -60,7 +63,55 @@ class Library:
             raise Exception("Failed to add user profile to database")
         return self.cursor.lastrowid  #return the generated profile_id
 
+    def addLibraryGraph(self, graph):
+        """Add the library graph structure to the database. The graph is a dictionary of dictionaries where the key of the outer dictionary is the work_id of a book and the value is a dictionary of similar books and their cosine similarity scores."""
+        for book_one_workID, similar_books in graph.items():
+            for book_two_workID, similarity_score in similar_books.items():
+                self.addLibraryGraphEntry(book_one_workID, book_two_workID, similarity_score)
+
+    def addLibraryGraphEntry(self, book_one_workID, book_two_workID, similarity_score) -> int:
+        self.cursor.execute("""
+        INSERT INTO libraryGraph (book_one_workID, book_two_workID, similarity_score)
+        VALUES (?, ?, ?)
+        """, (book_one_workID, book_two_workID, similarity_score))
+        self.conn.commit()
+
+        if self.cursor.lastrowid is None:
+            raise Exception("Failed to add library graph entry to database")
+        return self.cursor.lastrowid  #return the generated graph_id
     #methods to get data from database
+
+    def getBookEmbeddings(self):
+        """Fetch all book embeddings from the database and return them as a 
+        dictionary with workID as key and embedding as value."""
+        self.cursor.execute("SELECT work, embedding FROM bookData")
+        results = self.cursor.fetchall()
+        
+        bookEmbeddings = {}
+        for result in results:
+            workID = result[0]
+            embedding = result[1]
+            bookEmbeddings[workID] = embedding 
+                
+        return bookEmbeddings 
+
+    def getLibraryGraph(self):
+        """Fetch the library graph structure from the database and return it as a 
+        dictionary of dictionaries where the key of the outer dictionary is the work_id of a book and the value is a dictionary of similar books and their cosine similarity scores."""
+        self.cursor.execute("SELECT book_one_workID, book_two_workID, similarity_score FROM libraryGraph")
+        results = self.cursor.fetchall()
+        
+        graph = {}
+        for result in results:
+            book_one_workID = result[0]
+            book_two_workID = result[1]
+            similarity_score = result[2]
+            
+            if book_one_workID not in graph:
+                graph[book_one_workID] = {}
+            graph[book_one_workID][book_two_workID] = similarity_score
+                
+        return graph
 
     def getTitlesFromBookData(self, workIDS: list) -> list:
         self.cursor.execute("""
@@ -116,10 +167,24 @@ class Library:
         results = self.cursor.fetchall()
         return [result[0] for result in results] if results else []
     
+    def getBookEmbeddingsFromBookData(self, workIDS: list) -> list:
+        self.cursor.execute("""
+        SELECT embedding 
+        FROM bookData 
+        WHERE workID IN (?)
+        """, (workIDS,))
+        results = self.cursor.fetchall()
+        return [result[0] for result in results] if results else []
     
     #methods to search database
     def isBookInLibrary(self, workID):
         self.cursor.execute("SELECT 1 FROM bookData WHERE work = ?", (workID,))
+        return self.cursor.fetchone() is not None
+
+    def isLibraryGraphInLibrary(self):
+        """Check if the library graph structure exists in the database by checking
+          if there are any entries in the libraryGraph table."""
+        self.cursor.execute("SELECT 1 FROM libraryGraph")
         return self.cursor.fetchone() is not None
 
     def areBooksInLibrary(self, workIDS: list) -> list:
@@ -195,6 +260,18 @@ class Library:
             rating_count INTEGER,           
             embedding BLOB
             bookData_id INTEGER PRIMARY KEY AUTOINCREMENT
+        )
+        """)
+        self.conn.commit()
+
+    def createLibraryGraphTable(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS libraryGraph (
+            graph_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_one_workID TEXT UNIQUE,
+            book_two_workID TEXT UNIQUE,
+            similarity_score REAL,
+            FOREIGN KEY (book_two_workID) REFERENCES bookData(workID)
         )
         """)
         self.conn.commit()
