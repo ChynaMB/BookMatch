@@ -1,15 +1,22 @@
+from BookMatch.userProfileGraph import UserProfileGraph
 from library import Library
-from libraryGraph import LibraryGraph
+from userProfileGraph import UserProfileGraph
 from dataExtractor import DataExtractor
 
 class Recommender:
     def __init__(self, csv_path:str):
         self.library = Library()
-        self.libraryGraph = LibraryGraph(self.library)
+        self.userProfileGraph = UserProfileGraph(self.library)
         self.dataExtractor = DataExtractor(csv_path, self.library)
         self.userProfile = self.dataExtractor.createUserProfile()
         self.userID = self.userProfile.getUserID()
-        
+
+        self.finalNumberOfMatches = 10 #number of matches to return to user
+        self.baseNumberOfMatches = 50 #number of matches to generate from book embedding comparison
+        self.numOfSimilarBooks = 20 #number of similar books to retrieve from similar user matching
+        self.numOfSimilarUserProfiles = 20 #number of similar user profiles to retrieve from user profile graph
+        self.authorMatchWeight = 0.1 #weight to increase match score if a book is from a liked author
+        self.ratingMatchWeight = 0.1 #weight to increase match score based on average rating of the book
 
     #compare user profile embedding with book embeddings in database to generate match scores
     #compare user profile embedding with other user profile embedding -> generate match score
@@ -20,28 +27,45 @@ class Recommender:
     #then sort the matches by match score and return the top N matches
     #add user profile to database for future matching with other users
 
-    def generateRecommendations(self, finalNumberOfMatches: int = 10, baseNumberOfMatches:int = 50):
-        #generate match scores based on user profile embedding and book embeddings in database
-        bookMatches = self.libraryGraph.getUserProfileSimilarBooks(self.userProfile, baseNumberOfMatches)
+    #TODO: create similarity inclusion threshold to only include matches that are above a certain similarity score 
+    # (e.g. only include books that have a match score above 0.7) - this can be applied to both book embedding comparison
+    #  and similar user matching
 
-        #generate match scores based on user profile embedding and other user profile embeddings in database
-        #create userProfileClass - similar to libraryGraph but for user profiles - to handle this part of the matching process
-        profileMatches = None
+    def generateRecommendations(self):
+        #generate match scores by comparing user profile embedding and book embeddings in database
+        bookMatches = self.userProfileGraph.getUserProfileSimilarBooks(self.userProfile, self.numOfSimilarBooks)
 
-        #pull matches from highly similar users and generate match scores
-        userProfileBookMatches = None
+        #generate match scores by comparing user profile embedding to other user profile embeddings in database
+        profileBookMatches = self.userProfileGraph.getSimilarBooksFomUserProfileMatch(self.userProfile, self.numOfSimilarUserProfiles, self.numOfSimilarBooks)    
 
         #combine matches from book embedding comparison and similar user matching - increase match score if a match is found in both
-        combinedMatches = None
+        combinedMatches = {}
+        for workID, matchScore in bookMatches:
+            if workID in profileBookMatches:
+                combinedMatches[workID] = matchScore + profileBookMatches[workID]  #increase match score if found in both
 
         #increase match score for books from liked authors
+        likedAuthors = self.userProfile.getLikedAuthors()
+        for workID in combinedMatches:
+            bookAuthor = self.library.getAuthorsFromBookData([workID])[0] #get author of the book
+            if bookAuthor in likedAuthors:
+                combinedMatches[workID] += self.authorMatchWeight * likedAuthors.count(bookAuthor)  #increase match score based on number of times author is liked
 
         #adjust match score based on average rating of the book
-        finalMatches = None
+        finalMatches = {}
+        for workID, matchScore in combinedMatches.items():
+            averageRating = self.library.getAverageRatingsFromBookData([workID])[0]
+            if averageRating is not None:
+                matchScore += (averageRating * self.ratingMatchWeight)  #increase match score based on average rating of the book
+            finalMatches[workID] = matchScore
 
         #sort matches by match score and return top N=finalNumberOfMatches matches
+        sortedFinalMatches = sorted(finalMatches.items(), key=lambda x: x[1], reverse=True)
+        finalMatches = {}
+        for i in range(min(self.finalNumberOfMatches, len(sortedFinalMatches))):
+            workID, matchScore = sortedFinalMatches[i]
+            finalMatches[workID] = matchScore
 
         self.library.closeConnection()
         return finalMatches
         
-       

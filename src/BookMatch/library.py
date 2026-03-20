@@ -21,6 +21,8 @@ class Library:
         """, (matches, userProfileID))
         self.conn.commit()
 
+    #TODO: Change add methods so that they can be used to update existing entries as well, e.g. if a user profile already exists for a user, update the existing entry instead of creating a new entry. This will be more efficient and will also allow for updating user profiles in the future as users read more books and their preferences change.
+
     #methods to add to database
     def addUser(self) -> int:
         self.cursor.execute("INSERT INTO users DEFAULT VALUES")
@@ -63,24 +65,41 @@ class Library:
             raise Exception("Failed to add user profile to database")
         return self.cursor.lastrowid  #return the generated profile_id
 
-    def addLibraryGraph(self, graph):
-        """Add the library graph structure to the database. The graph is a dictionary of dictionaries where the key of the outer dictionary is the work_id of a book and the value is a dictionary of similar books and their cosine similarity scores."""
+    def addBookGraph(self, graph):
+        """Add the book graph structure to the database. The graph is a dictionary of dictionaries where the key of the outer dictionary is the work_id of a book and the value is a dictionary of similar books and their cosine similarity scores."""
         for book_one_workID, similar_books in graph.items():
             for book_two_workID, similarity_score in similar_books.items():
-                self.addLibraryGraphEntry(book_one_workID, book_two_workID, similarity_score)
+                self.addBookGraphEntry(book_one_workID, book_two_workID, similarity_score)
 
-    def addLibraryGraphEntry(self, book_one_workID, book_two_workID, similarity_score) -> int:
+    def addBookGraphEntry(self, book_one_workID, book_two_workID, similarity_score) -> int:
         self.cursor.execute("""
-        INSERT INTO libraryGraph (book_one_workID, book_two_workID, similarity_score)
+        INSERT INTO bookGraph (book_one_workID, book_two_workID, similarity_score)
         VALUES (?, ?, ?)
         """, (book_one_workID, book_two_workID, similarity_score))
         self.conn.commit()
 
         if self.cursor.lastrowid is None:
-            raise Exception("Failed to add library graph entry to database")
+            raise Exception("Failed to add book graph entry to database")
         return self.cursor.lastrowid  #return the generated graph_id
-    #methods to get data from database
+    
+    def addUserProfileGraph(self, graph):
+        """Add the user profile graph structure to the database. The graph is a dictionary of dictionaries where the key of the outer dictionary is the user_id of a user and the value is a dictionary of similar users and their cosine similarity scores."""
+        for user_one_id, similar_users in graph.items():
+            for user_two_id, similarity_score in similar_users.items():
+                self.addUserProfileGraphEntry(user_one_id, user_two_id, similarity_score)
 
+    def addUserProfileGraphEntry(self, user_one_id, user_two_id, similarity_score) -> int:
+        self.cursor.execute("""
+        INSERT INTO userProfileGraph (user_one_id, user_two_id, similarity_score)
+        VALUES (?, ?, ?)
+        """, (user_one_id, user_two_id, similarity_score))
+        self.conn.commit()
+
+        if self.cursor.lastrowid is None:
+            raise Exception("Failed to add user profile graph entry to database")
+        return self.cursor.lastrowid  #return the generated graph_id
+
+    #methods to get data from database
     def getBookEmbeddings(self):
         """Fetch all book embeddings from the database and return them as a 
         dictionary with workID as key and embedding as value."""
@@ -175,7 +194,21 @@ class Library:
         """, (workIDS,))
         results = self.cursor.fetchall()
         return [result[0] for result in results] if results else []
-    
+
+    def getUserProfileEmbeddings(self):
+        """Fetch all user profile embeddings from the database and return them as a 
+        dictionary with user_id as key and embedding as value."""
+        self.cursor.execute("SELECT user_id, vector_embedding FROM userProfiles")
+        results = self.cursor.fetchall()
+        
+        userProfileEmbeddings = {}
+        for result in results:
+            user_id = result[0]
+            embedding = result[1]
+            userProfileEmbeddings[user_id] = embedding 
+                
+        return userProfileEmbeddings
+
     #methods to search database
     def isBookInLibrary(self, workID):
         self.cursor.execute("SELECT 1 FROM bookData WHERE work = ?", (workID,))
@@ -272,6 +305,19 @@ class Library:
             book_two_workID TEXT UNIQUE,
             similarity_score REAL,
             FOREIGN KEY (book_two_workID) REFERENCES bookData(workID)
+        )
+        """)
+        self.conn.commit()
+
+    def createUserProfileGraphTable(self):
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS userProfileGraph (
+            graph_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_one_id INTEGER UNIQUE,
+            user_two_id INTEGER UNIQUE,
+            similarity_score REAL,
+            FOREIGN KEY (user_one_id) REFERENCES users(user_id),
+            FOREIGN KEY (user_two_id) REFERENCES users(user_id)
         )
         """)
         self.conn.commit()

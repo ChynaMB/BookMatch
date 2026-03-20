@@ -52,6 +52,9 @@ class UserProfile:
         self.matches = matches
         self.library.updateUserProfileMatches(self.userProfileID, matches)
 
+    def getLikedAuthors(self):
+        return self.likedAuthors
+
     def getMatches(self):
         return self.matches
     

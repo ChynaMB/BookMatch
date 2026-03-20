@@ -18,28 +18,28 @@ Core responsibilities of this class include:
 4. Providing methods to retrieve similar books based on the graph structure
 """
 
-class LibraryGraph:
+class BookGraph:
     def __init__(self, library):
         self.library = library
-        self.libraryGraph = self.createLibraryGraph()
+        self.bookGraph = self.createBookGraph()
        
     #methods for for adding and updating graph
-    def createLibraryGraph(self):
+    def createBookGraph(self):
         """Builds the graph structure by calculating cosine similarity scores between book embeddings."""
         if self.library.isLibraryGraphInLibrary():
             return self.library.getLibraryGraph()
 
         bookEmbeddings = self.library.getBookEmbeddings()
         
-        libraryGraph = {}
+        bookGraph = {}
         for workID1, embedding1 in bookEmbeddings.items():
             for workID2, embedding2 in bookEmbeddings.items():
                 if workID1 != workID2:
                     similarity = cosine_similarity(embedding1.reshape(1, -1), embedding2.reshape(1, -1))[0][0]
-                    libraryGraph[workID1][workID2] = similarity
+                    bookGraph[workID1][workID2] = similarity
         
-        self.library.addLibraryGraph(libraryGraph)
-        return libraryGraph
+        self.library.addLibraryGraph(bookGraph)
+        return bookGraph
     
     def addBookToGraph(self, newBook):
         """given a new Book object, calculates cosine similarity scores with existing books
@@ -49,10 +49,10 @@ class LibraryGraph:
         newBookWorkID = newBook.getWorkID()
         for workID, embedding in bookEmbeddings.items():
             similarity = cosine_similarity(newBookEmbedding.reshape(1, -1), embedding.reshape(1, -1))[0][0]
-            self.libraryGraph[newBookWorkID][workID] = similarity
-            self.libraryGraph[workID][newBookWorkID] = similarity
-            self.library.addLibraryGraphEntry(newBookWorkID, workID, similarity)
-            self.library.addLibraryGraphEntry(workID, newBookWorkID, similarity)
+            self.bookGraph[newBookWorkID][workID] = similarity
+            self.bookGraph[workID][newBookWorkID] = similarity
+            self.library.addBookGraphEntry(newBookWorkID, workID, similarity)
+            self.library.addBookGraphEntry(workID, newBookWorkID, similarity)
 
     def addBooksToGraph(self, newBooks: list):
         """given a list of Book objects, adds new books to the graph structure 
@@ -64,10 +64,10 @@ class LibraryGraph:
     def getSimilarBooks(self, bookWorkID, numOfSimilarBooks):
         """given a book's workID and a number, retrieves the most similar books based on cosine similarity 
         scores in the graph structure. returns a dictionary of similar book workIDs and their similarity scores."""
-        if bookWorkID not in self.libraryGraph:
+        if bookWorkID not in self.bookGraph:
             return []
         
-        similarBooks = self.libraryGraph[bookWorkID]
+        similarBooks = self.bookGraph[bookWorkID]
         sortedSimilarBooks = sorted(similarBooks.items(), key=lambda item: item[1], reverse=True)
         matches = {}
         for i in range(min(numOfSimilarBooks, len(sortedSimilarBooks))):
