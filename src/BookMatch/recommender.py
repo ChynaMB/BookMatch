@@ -18,6 +18,8 @@ class Recommender:
         self.authorMatchWeight = 0.1 #weight to increase match score if a book is from a liked author
         self.ratingMatchWeight = 0.1 #weight to increase match score based on average rating of the book
 
+        self.matches = {} #dictionary to store final matches (key: workID, value: match score)
+
     #compare user profile embedding with book embeddings in database to generate match scores
     #compare user profile embedding with other user profile embedding -> generate match score
     #pull matches from highly similar users -> generate match scores
@@ -69,3 +71,4 @@ class Recommender:
         self.library.closeConnection()
         return finalMatches
         
+    

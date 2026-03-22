@@ -1,15 +1,19 @@
+from subjectGraph import SubjectGraph
+
 class UserProfile:
     def __init__(self, userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, 
-                 subjectGraph, fiveStarWeight, fourStarWeight, library):
+                 fiveStarWeight, fourStarWeight, ceilingFactor: float, library):
         self.userID = userID
         self.fiveStarBookshelf = fiveStarBookshelf
         self.fourStarBookshelf = fourStarBookshelf
         self.fiveStarBooks = self.getBookWorkIDsFromBookshelf(self.fiveStarBookshelf)
         self.fourStarBooks = self.getBookWorkIDsFromBookshelf(self.fourStarBookshelf)
         self.likedAuthors = likedAuthors #key: author name, value: weighted occurence based on author's books in five star and four star bookshelves
-        self.subjectGraph = subjectGraph
         self.fiveStarWeight = fiveStarWeight
         self.fourStarWeight = fourStarWeight
+        self.ceilingFactor = ceilingFactor
+
+        self.subjectGraph = SubjectGraph(self.fiveStarBookshelf, self.fourStarBookshelf, fiveStarWeight, fourStarWeight,ceilingFactor).createSubjectGraph()
         self.userVectorEmbedding = self.createUserVectorEmbedding()
         self.matches = {} #key: bookData_id, value: match score 
 
@@ -19,7 +23,7 @@ class UserProfile:
     def getBookWorkIDsFromBookshelf(self, bookshelf):
         """given a bookshelf (list of book objects), return a list of workIDs for those books"""
         return [book.getWorkID() for book in bookshelf]
-   
+
     #TODO: optimse method - especially if-else statements in loops
     def createUserVectorEmbedding(self):
         """Uses the users five and four star bookshelves to create a vector embedding
