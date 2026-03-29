@@ -4,12 +4,20 @@ import networkx as nx
 import numpy as np
 
 class SubjectGraph:
-    def __init__(self, fiveStarBooks, fourStarBooks, fiveStarWeight: float, fourStarWeight: float, ceilingFactor: float):
+    def __init__(self, fiveStarBooks, fourStarBooks, fiveStarWeight: float, fourStarWeight: float, ceilingFactor: float, library):
         self.fiveStarBooks = fiveStarBooks
         self.fourStarBooks = fourStarBooks
         self.fiveStarWeight = fiveStarWeight
         self.fourStarWeight = fourStarWeight
         self.ceilingFactor = ceilingFactor
+        self.subjectGraph = self.createSubjectGraph()
+
+        self.nodeFrequencyWeight = 0.5
+        self.centralityWeight = 0.3
+        self.edgeWeightWeight = 0.2
+
+        self.library = self.library
+        
 
     #TODO: Correct the naming practices and logic of this method 
     #TODO: maybe break it up into smaller methods for clarity and maintainability. Also, consider edge cases (e.g. no books, all books have the same subjects, etc.) and how to handle them.
@@ -73,15 +81,44 @@ class SubjectGraph:
 
         return subjectGraph
 
+    #TODO: try to break this method up into smaller methods for clarity and maintainability. 
+    #TODO: Also, consider edge cases (e.g. no books, all books have the same subjects, etc.) and how to handle them.
+    #TODO: Decrease the time complexity of this method by optimizing the way matches are calculated and stored.
+    #TODO: Also make data retrieval more efficient 
+
     def subjectGraphComparator(self):
         """This method is used to compare the subject graph of the user profile with the subjects
-          of the books in the database."""
+          of the books in the database and generate match scores."""
         #how many of the subjects in the book are also in the user profile subject graph? 
+
         #and weight those subjects based on their importance in the user profile graph 
-        #the weighting is based on four factors: 
-        # 1) node degree - how many connections the subject has in the graph
-        # 2) node weight - how important the subject is to the user based on their interactions with books that have that subject
-        # 3) graph centrality - how central the subject is in the graph structure (e.g. using eigenvector centrality or betweenness centrality)
-        # 4) node frequency - how many times the subject appears in the user's reading history
-        pass
+        #the weighting is based on three factors: 
+        # 1)  node frequency - how many times the subject appears in the user's reading history
+        self.nodeFrequency = {node: data['frequency'] for node, data in self.subjectGraph.nodes(data=True)}
+        # 2) graph centrality - how central the subject is in the graph structure (e.g. using eigenvector centrality or betweenness centrality)
+        self.eigenvectorCentrality = nx.eigenvector_centrality(self.subjectGraph, max_iter=1000) # Calculate eigenvector centrality for each node in the graph
+        # 3) edge weights - how strongly the subject is connected to other subjects in the graph (e.g. using edge weights or co-occurrence counts) - this can be calculated as the sum of the weights of the edges connected to the node
+
+        books = self.library.getAllBooks()
+        matches = {}
+
+        for book in books:
+            workID = book['workID']
+            subjects = book['subjects']
+            for subject in subjects:
+                if subject in self.subjectGraph.nodes:
+                    # Calculate match score based on node frequency, eigenvector centrality, and edge weights
+                    node_freq = self.nodeFrequency.get(subject, 0)
+                    centrality = self.eigenvectorCentrality.get(subject, 0)
+                    edge_weight_sum = sum(self.subjectGraph[subject][neighbor]['weight'] for neighbor in self.subjectGraph.neighbors(subject))
+                    
+                    # Combine these factors into a single match score (this is a simple example, you can experiment with different formulas)
+                    match_score = node_freq * self.nodeFrequencyWeight + centrality * self.centralityWeight + edge_weight_sum * self.edgeWeightWeight
+                    
+                    # Store the match score for this book (you may want to aggregate scores if multiple subjects match)
+                    if workID not in matches:
+                        matches[workID] = match_score
+                    else:
+                        matches[workID] += match_score
         
+        return matches

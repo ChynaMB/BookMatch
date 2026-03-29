@@ -40,11 +40,14 @@ class Recommender:
         #generate match scores by comparing user profile embedding to other user profile embeddings in database
         profileBookMatches = self.userProfileGraph.getSimilarBooksFomUserProfileMatch(self.userProfile, self.numOfSimilarUserProfiles, self.numOfSimilarBooks)    
 
+        #generate match scores by comparing user profile subject graph to book subjects in database
+        subjectBookMatches = self.userProfile.subjectGraph.subjectGraphComparator() # type: ignore
+
         #combine matches from book embedding comparison and similar user matching - increase match score if a match is found in both
         combinedMatches = {}
         for workID, matchScore in bookMatches:
             if workID in profileBookMatches:
-                combinedMatches[workID] = matchScore + profileBookMatches[workID]  #increase match score if found in both
+                combinedMatches[workID] = matchScore + profileBookMatches[workID] + subjectBookMatches[workID]  #increase match score if found in both
 
         #increase match score for books from liked authors
         likedAuthors = self.userProfile.getLikedAuthors()

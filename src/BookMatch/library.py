@@ -1,5 +1,10 @@
 import sqlite3
 
+#TODO: switch from sql to nosql
+#TODO: add error handling for database operations (e.g. try-except blocks, logging, etc.) 
+# to ensure that the application can gracefully handle any issues that may arise with the database connection or queries. 
+# This will help to improve the robustness and reliability of the application.
+
 class Library:
     def __init__(self):
         self.conn = sqlite3.connect('library.db')
@@ -100,6 +105,25 @@ class Library:
         return self.cursor.lastrowid  #return the generated graph_id
 
     #methods to get data from database
+    def getAllBooks(self):
+        """Fetch all book data from the database and return it as a list of dictionaries where each dictionary contains the data for a single book."""
+        self.cursor.execute("SELECT workID, title, author, subjects, average_rating, embedding FROM bookData")
+        results = self.cursor.fetchall()
+        
+        books = []
+        for result in results:
+            book = {
+                'workID': result[0],
+                'title': result[1],
+                'author': result[2],
+                'subjects': result[3],
+                'average_rating': result[4],
+                'embedding': result[5]
+            }
+            books.append(book)
+                
+        return books
+
     def getBookEmbeddings(self):
         """Fetch all book embeddings from the database and return them as a 
         dictionary with workID as key and embedding as value."""

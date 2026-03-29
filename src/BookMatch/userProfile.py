@@ -13,9 +13,10 @@ class UserProfile:
         self.fourStarWeight = fourStarWeight
         self.ceilingFactor = ceilingFactor
 
-        self.subjectGraph = SubjectGraph(self.fiveStarBookshelf, self.fourStarBookshelf, fiveStarWeight, fourStarWeight,ceilingFactor).createSubjectGraph()
+        #TODO: use threads to parallelise the creation of the subject graph and vector embedding
+        self.subjectGraph = SubjectGraph(self.fiveStarBookshelf, self.fourStarBookshelf, fiveStarWeight, fourStarWeight, ceilingFactor, library).createSubjectGraph()
         self.userVectorEmbedding = self.createUserVectorEmbedding()
-        self.matches = {} #key: bookData_id, value: match score 
+        self.userProfileBookMatches = {} #key: workID, value: match score 
 
         self.library = library
         self.userProfileID = library.addUserProfile(self.userID, self.fiveStarBooks, self.fourStarBooks, self.subjectGraph, self.likedAuthors, self.userVectorEmbedding)
@@ -52,15 +53,15 @@ class UserProfile:
 
         return userProfileVectorEmbedding
                     
-    def updateMatches(self, matches):
-        self.matches = matches
+    def updateUserProfileBookMatches(self, matches):
+        self.userProfileBookMatches = matches
         self.library.updateUserProfileMatches(self.userProfileID, matches)
 
     def getLikedAuthors(self):
         return self.likedAuthors
 
     def getMatches(self):
-        return self.matches
+        return self.userProfileBookMatches
     
     def getUserID(self):
         return self.userID
