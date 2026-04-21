@@ -14,6 +14,8 @@ class Library:
         self.createUserProfileTable()
         self.createBookDataTable()
 
+        self.fromBookDataParameters = ['workID', 'title', 'author', 'subjects', 'description', 'average_rating', 'rating_count', 'embedding']
+
     def closeConnection(self):
         self.conn.close()
 
@@ -38,7 +40,7 @@ class Library:
         return self.cursor.lastrowid  #return the generated user_id
 
     #TODO: rewrite function to be more efficient
-    def addBookData(self, workID, title, author, subjects, average_rating, embedding) -> int:
+    def addBookData(self, workID, title, isbn, isbn13, author, subjects, description, average_rating, rating_count, embedding) -> int:
         """Add book data to the database based on the workID. If the workID already exists, change nothing. 
         If the workID does not exist, add a new entry with the provided data."""
         #check if book data already exists for the workID
@@ -51,9 +53,9 @@ class Library:
         
         #book data does not exist, insert a new entry
         self.cursor.execute("""
-        INSERT INTO bookData (work, title, author, subjects, average_rating, embedding)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (workID, title, author, subjects, average_rating, embedding))
+        INSERT INTO bookData (work, title, isbn, isbn13, author, subjects, description, average_rating, rating_count, embedding)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (workID, title, isbn, isbn13, author, subjects, description, average_rating, rating_count, embedding))
 
         if self.cursor.lastrowid is None:
             raise Exception("Failed to add book data to database")
@@ -156,63 +158,12 @@ class Library:
                 
         return graph
 
-    def getTitlesFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT title 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
+    def getParamFromBookData(self, workIDS: list, param: str) -> list:
+        if param not in self.fromBookDataParameters:
+            raise ValueError("Invalid parameter specified")
 
-    def getAuthorsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT author 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
-
-    def getSubjectsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT subjects 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
-    
-    def getDescriptionsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT description 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
-
-    def getAverageRatingsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT average_rating 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
-    
-    def getRatingCountsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT rating_count 
-        FROM bookData 
-        WHERE workID IN (?)
-        """, (workIDS,))
-        results = self.cursor.fetchall()
-        return [result[0] for result in results] if results else []
-    
-    def getBookEmbeddingsFromBookData(self, workIDS: list) -> list:
-        self.cursor.execute("""
-        SELECT embedding 
+        self.cursor.execute(f"""
+        SELECT {param} 
         FROM bookData 
         WHERE workID IN (?)
         """, (workIDS,))
@@ -311,8 +262,11 @@ class Library:
         CREATE TABLE IF NOT EXISTS bookData (
             workID TEXT PRIMARY KEY,
             title TEXT,
+            isbn INTEGER,
+            isbn13 INTEGER,
             author TEXT,
             subjects TEXT,  
+            description TEXT,
             average_rating REAL,   
             rating_count INTEGER,           
             embedding BLOB
@@ -345,3 +299,24 @@ class Library:
         )
         """)
         self.conn.commit()
+
+    def initialiseLibrary(self):
+        """Initialise the library by creating the necessary tables in the database."""
+        self.createUserTable()
+        self.createCSVdataTable()
+        self.createUserProfileTable()
+        self.createBookDataTable()
+        self.createLibraryGraphTable()
+        self.createUserProfileGraphTable()
+
+    def importBookData(self):
+        """Import book data using API calls to public datasets on Kaggle. 
+        This function will fetch book data from text files retieved from the open library data dumps
+        and use API calls to the open library API and google books API to fetch missing data on the books 
+        and then store the data in the database."""
+        pass
+        
+
+#initialise the library and create the necessary tables
+library = Library()
+library.initialiseLibrary()

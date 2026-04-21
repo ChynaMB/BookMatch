@@ -20,7 +20,7 @@ class DataExtractor:
         self.fourStarWeight = 0.7
         self.ceilingFactor = 1.5 #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
 
-    def fetchWorksFromISBNS(self, ISBNS: list) ->list[tuple[str, str]]:
+    def fetchWorksFromISBNS(self, ISBNS: list) ->list[tuple[str, str, str]]:
         """Given a list of ISBNs, return a list of works (work ID)
         we use wworks instead of isbn because some books have multiple editions with different ISBNs, 
         but they all belong to the same work"""
@@ -38,12 +38,12 @@ class DataExtractor:
                     workIDS.add(workID)
                     isbn10 = entry.get("identifiers", {}).get("isbn_10", [None])[0]
                     if isbn10 in ISBNS:
-                        ISBN_workIDS.append((isbn10, workID))
+                        ISBN_workIDS.append((isbn10, None, workID))
                     else:
                         isbn13 = entry.get("identifiers", {}).get("isbn_13", [None])[0]
-                        ISBN_workIDS.append((isbn13, workID))
+                        ISBN_workIDS.append((None, isbn13, workID))
                     
-        return ISBN_workIDS #return a list of tuples (isbn, workID)
+        return ISBN_workIDS #return a list of tuples (isbn, isbn13, workID)
     
     def getBookInfo(self, ISBNS) -> dict:
         """
@@ -68,7 +68,7 @@ class DataExtractor:
         #Get workIDs from ISBNs 
         ISBN_workIDS = self.fetchWorksFromISBNS(ISBNS)
         #Check database for book data using workIDs, if not in database, fetch from APIs and add to database
-        for isbn, workID in ISBN_workIDS:
+        for isbn, isbn13, workID in ISBN_workIDS:
             if self.library.isBookInLibrary(workID):
                 title = self.library.getTitleFromBookData(workID)
                 author = self.library.getAuthorFromBookData(workID)
@@ -80,11 +80,11 @@ class DataExtractor:
                 title, author, subjects = self.fetchBookDataFromOpenLibrary(workID)
                 description = self.fetchBookDescriptionFromGoogleBooks(isbn)
                 averageRating, ratingCount = self.fetchRatingsFromAPIs(isbn)
-
-                #add book data to database
-                self.library.addBookData(workID, title, author, averageRating, subjects, description)
-
-            bookInfo[(isbn, workID)] = (title, author, subjects, description, averageRating, ratingCount)
+                
+                #create a book object to add the book data to the database and create the book vector embedding
+                book = Book(workID, isbn, isbn13, title, author, subjects, description, averageRating, ratingCount, self.library) 
+               
+            bookInfo[(isbn, isbn13, workID)] = (title, author, subjects, description, averageRating, ratingCount)
 
         return bookInfo
 
@@ -175,18 +175,18 @@ class DataExtractor:
         """Given a list of works, check library.db to see if we have a submition for each work
         if not, create a Book for it so it can be stored in the library"""
         bookShelf = []
-        for (isbn, workID) in bookInfo.keys():
+        for (isbn, isbn13, workID) in bookInfo.keys():
             if self.library.isBookInLibrary(workID): #check if book is in library.db
                 continue
-            title, author, subjects, description, averageRating, ratingCount = bookInfo[(isbn, workID)]
-            bookShelf.append(Book(workID, isbn, title, author, subjects, description, averageRating, ratingCount, self.library))
+            title, author, subjects, description, averageRating, ratingCount = bookInfo[(isbn, isbn13, workID)]
+            bookShelf.append(Book(workID, isbn, isbn13, title, author, subjects, description, averageRating, ratingCount, self.library))
         return bookShelf
     
-    def addBookToBookShelf(self, bookShelf, workID, isbn, title, author, subjects, description, averageRating, ratingCount):
+    def addBookToBookShelf(self, bookShelf, workID, isbn, isbn13, title, author, subjects, description, averageRating, ratingCount):
         """Given a bookShelf, update the bookShelf with a new book if it is not already in the library"""
         if self.library.isBookInLibrary(workID):
             return bookShelf
-        bookShelf.append(Book(workID, isbn, title, author, subjects, description, averageRating, ratingCount, self.library))
+        bookShelf.append(Book(workID, isbn, isbn13, title, author, subjects, description, averageRating, ratingCount, self.library))
         return bookShelf
 
     def createUserProfile(self) -> UserProfile:

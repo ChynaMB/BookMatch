@@ -3,7 +3,9 @@ from library import Library
 from userProfileGraph import UserProfileGraph
 from dataExtractor import DataExtractor
 
-class Recommender:
+#TODO: change reccomender so it factors in the different match scores based on the different methods of generating matches 
+    
+class Recommender:    
     def __init__(self, csv_path:str):
         self.library = Library()
         self.userProfileGraph = UserProfileGraph(self.library)
