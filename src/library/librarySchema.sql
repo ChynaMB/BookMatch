@@ -24,7 +24,6 @@ CREATE TABLE authors (
 );
 
 -- a book's author(s)
--- does this store multiple authors?????
 CREATE TABLE book_authors (
     work_id TEXT,
     author_id INTEGER,
@@ -33,7 +32,7 @@ CREATE TABLE book_authors (
     FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE CASCADE
 );
 
--- ???
+-- indexing to make queries more efficient
 CREATE INDEX idx_book_authors_work ON book_authors(work_id);
 CREATE INDEX idx_book_authors_author ON book_authors(author_id);
 
@@ -52,7 +51,7 @@ CREATE TABLE book_subjects (
     FOREIGN KEY (subject_id) REFERENCES subjects(subject_id) ON DELETE CASCADE
 );
 
--- ???
+-- indexing to make queries more efficient
 CREATE INDEX idx_book_subjects_work ON book_subjects(work_id);
 CREATE INDEX idx_book_subjects_subject ON book_subjects(subject_id);
 
@@ -70,7 +69,7 @@ CREATE TABLE user_bookshelf (
     FOREIGN KEY (work_id) REFERENCES books(work_id) ON DELETE CASCADE
 );
 
--- ???
+-- indexing to make queries more efficient
 CREATE INDEX idx_user_books_user ON user_books(user_id);
 CREATE INDEX idx_user_books_work ON user_books(work_id);
 

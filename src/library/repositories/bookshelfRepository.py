@@ -2,7 +2,7 @@ class BookshelfRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def upsert_user_book(self, user_id, work_id, rating=None, date_added=None, review=None, read_count=None, shelf=None):
+    def upsertBookIntoUserBookshelf(self, user_id, work_id, rating=None, date_added=None, review=None, read_count=None, shelf=None):
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO user_books (user_id, work_id, rating, date_added, review, read_count, shelf)
@@ -18,7 +18,7 @@ class BookshelfRepository:
         self.conn.commit()
         cur.close()
 
-    def get_user_books(self, user_id):
+    def getUserBookshelf(self, user_id):
         cur = self.conn.cursor()
         cur.execute("""
             SELECT * FROM user_books WHERE user_id = %s;

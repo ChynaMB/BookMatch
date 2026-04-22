@@ -2,7 +2,7 @@ class SubjectsRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def get_or_create(self, name):
+    def getOrCreateSubject(self, name):
         cur = self.conn.cursor()
 
         cur.execute("SELECT subject_id FROM subjects WHERE name = %s;", (name,))

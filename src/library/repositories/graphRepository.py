@@ -2,10 +2,11 @@ class GraphRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    # -------------------------
-    # BOOK SIMILARITY
-    # -------------------------
-    def upsert_book_similarity(self, w1, w2, score):
+
+    # book similarity
+    def upsertBookSimilarity(self, w1, w2, score):
+        """insert the similarity score between two book embeddings,
+        if a similarity score already exists then update it"""
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO book_similarity (work_id_1, work_id_2, similarity_score)
@@ -16,7 +17,10 @@ class GraphRepository:
         self.conn.commit()
         cur.close()
 
-    def get_similar_books(self, work_id):
+    def getSimilarBooks(self, work_id) -> list[(tuple)]: 
+        """Go through all the similarity scores connected to a book using their work id
+        return all the rows in descending order (highest similiarity is first"""
+        
         cur = self.conn.cursor()
         cur.execute("""
             SELECT *
@@ -28,21 +32,24 @@ class GraphRepository:
         cur.close()
         return result
 
-    # -------------------------
-    # USER SIMILARITY
-    # -------------------------
-    def upsert_user_similarity(self, u1, u2, score):
+   
+    #user similarity
+    def upsertUserSimilarity(self, user1, user2, score):
+        """insert the similarity score between two user profile embeddings,
+        if a similarity score already exists then update it """
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO user_similarity (user_id_1, user_id_2, similarity_score)
             VALUES (%s, %s, %s)
             ON CONFLICT (user_id_1, user_id_2)
             DO UPDATE SET similarity_score = EXCLUDED.similarity_score;
-        """, (u1, u2, score))
+        """, (user1, user2, score))
         self.conn.commit()
         cur.close()
 
-    def get_similar_users(self, user_id):
+    def getSimilarUsers(self, user_id) -> list[(tuple)]:
+        """Go through all the similarity scores connected to a user using
+        return all the rows in descending order (highest similiarity is first"""
         cur = self.conn.cursor()
         cur.execute("""
             SELECT *
