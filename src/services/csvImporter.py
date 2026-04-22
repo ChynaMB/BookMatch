@@ -1,4 +1,5 @@
 from library.libraryConnection import connectToLibrary
+from library.repositories.usersRepository import UsersRepository
 from library.repositories.booksRepository import BooksRepository
 from library.repositories.authorsRepository import AuthorsRepository
 from library.repositories.bookshelfRepository import BookshelfRepository
@@ -8,7 +9,9 @@ class CSVimporter:
     def __init__(self, path):
         self.conn = connectToLibrary()
         self.path = path
-        self.user_id = 1 #database should generate user id
+        self.user_id = UsersRepository(self.conn).createUser()
+
+    def getUserID(self): return self.user_id
 
     #TODO: accomodate for missing data
     #TODO: make more effcient
