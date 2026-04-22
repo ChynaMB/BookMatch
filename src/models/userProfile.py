@@ -1,4 +1,4 @@
-from subjectGraph import SubjectGraph
+from services.subjectGraph import SubjectGraph
 
 class UserProfile:
     def __init__(self, userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, 

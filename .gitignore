@@ -1,2 +1,16 @@
 *.db
-*.sqlite
+libraryConnection.py
+library/libraryConnection.py
+bookmatch/libraru/libraryConnection.py
+data
+books.csv
+data.books.csv
+google_books_1299.csv
+data.google_books_1299.csv
+data.csv
+data.data.csv
+
+data/books.csv
+data/data.csv
+data/google_books_1299.csv
+data/ol_dump_works_2026-03-31.txt

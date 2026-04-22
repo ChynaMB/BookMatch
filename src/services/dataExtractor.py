@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
-from userProfile import UserProfile
-from book import Book
+from models.userProfile import UserProfile
+from models.book import Book
 
 
 class DataExtractor:

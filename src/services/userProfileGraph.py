@@ -1,4 +1,4 @@
-from bookGraph import BookGraph
+from services.bookGraph import BookGraph
 from sklearn.metrics.pairwise import cosine_similarity
 
 #This class extends the functionality of the BookGraph class to create a UserGraph class that 
