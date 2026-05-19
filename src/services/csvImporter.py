@@ -10,8 +10,8 @@ import pandas as pd
 import requests
 
 class CSVimporter:
-    def __init__(self, path):
-        self.conn = connectToLibrary()
+    def __init__(self, conn, path):
+        self.conn = conn
         self.path = path
         self.user_id = None
         self.isbns = []

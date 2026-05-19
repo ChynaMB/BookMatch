@@ -1,7 +1,7 @@
 class AuthorsRepository:
     def __init__(self, conn):
         self.conn = conn
-
+        
     def getOrCreateAuthor(self, author_name):
         cur = self.conn.cursor()
 
@@ -18,7 +18,8 @@ class AuthorsRepository:
             RETURNING author_id;
         """, (author_name,))
 
-        author_id = cur.fetchone()[0]
+        data = cur.fetchone()
+        author_id = data[0] if data else None
         self.conn.commit()
         cur.close()
         return author_id

@@ -72,6 +72,8 @@ class BookImporter:
 
             book_id = self.booksRepo.insertBook(workID, title, subtitle, description, isbn10, isbn13)
 
+            #rating not required as they are pulled from the csv and updated separately
+            
             for author in authors:
                 author_key = author["author"]["key"]
                 author_url = f"{self.openLibraryURL}{author_key}.json"
@@ -87,7 +89,7 @@ class BookImporter:
                 subject_id = SubjectsRepository(self.conn).getOrCreateSubject(subject)
 
             time.sleep(1)  #sleep for a bit to avoid hitting API rate limits (1 second)   
-          
+
     def importBooks(self):
         """Main method to import books into the library. It first retrieves work IDs for the given ISBNs, 
         then adds any new books to the library database."""
