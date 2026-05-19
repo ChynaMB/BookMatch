@@ -1,8 +1,18 @@
-from database.libraryConnection import connectToLibrary
+import psycopg2
 
 class Library:
     def __init__(self):
-        self.conn = connectToLibrary()
+        self.conn = self.connectToLibrary()
+
+    def connectToLibrary(self):
+        try:
+            conn = psycopg2.connect(
+                
+            )
+            print("Connected to PostgreSQL database")
+            return conn
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect to database: {e}")
 
     def execute(self, query, params=None):
         try:
