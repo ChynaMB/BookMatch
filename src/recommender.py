@@ -1,7 +1,7 @@
 from BookMatch.userProfileGraph import UserProfileGraph
 from database.library import Library
 from services.userProfileGraph import UserProfileGraph
-from services.dataExtractor import DataExtractor
+from services.dataAnalyser import DataExtractor
 
 #TODO: change reccomender so it factors in the different match scores based on the different methods of generating matches 
     

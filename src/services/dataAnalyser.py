@@ -4,7 +4,7 @@ from models.userProfile import UserProfile
 from models.book import Book
 
 
-class DataExtractor:
+class DataAnalyser:
     def __init__(self, csv_path: str, library):
         self.csv_path = csv_path
         self.csvDataFrame = pd.read_csv(csv_path)
@@ -20,10 +20,14 @@ class DataExtractor:
         self.fourStarWeight = 0.7
         self.ceilingFactor = 1.5 #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
 
-    def fetchWorksFromISBNS(self, ISBNS: list) ->list[tuple[str, str, str]]:
+    #TODO: update this function to fetch data from the database first, then use API calls if the data is not in the database.
+    def fetchWorksFromISBNS(self, ISBNS: list[tuple[str, str]]) ->list[tuple[str, str, str]]:
         """Given a list of ISBNs, return a list of works (work ID)
-        we use wworks instead of isbn because some books have multiple editions with different ISBNs, 
-        but they all belong to the same work"""
+        we use works instead of isbn because some books have multiple editions with different ISBNs, 
+        but they all belong to the same work
+        
+        this function returns a list of tuples (isbn, isbn13, workID) for each ISBN in the input list. 
+        If an ISBN does not have a corresponding workID, it will be returned with a workID of None."""
         keys = ",".join([f"ISBN:{isbn}" for isbn in ISBNS])
         url = f"{self.openLibraryURL}/api/books?bibkeys={keys}&format=json&jscmd=data"
         response = requests.get(url)
@@ -43,7 +47,7 @@ class DataExtractor:
                         isbn13 = entry.get("identifiers", {}).get("isbn_13", [None])[0]
                         ISBN_workIDS.append((None, isbn13, workID))
                     
-        return ISBN_workIDS #return a list of tuples (isbn, isbn13, workID)
+        return ISBN_workIDS #return a dictionairy of tuples (isbn, isbn13) workID
     
     def getBookInfo(self, ISBNS) -> dict:
         """

@@ -32,3 +32,4 @@ class AuthorsRepository:
         """, (work_id, author_id))
         self.conn.commit()
         cur.close()
+        

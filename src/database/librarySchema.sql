@@ -10,7 +10,7 @@ CREATE TABLE books (
     title TEXT NOT NULL,
     subtitle TEXT,
     description TEXT,
-    isbn TEXT,
+    isbn10 TEXT,
     isbn13 TEXT,
     average_rating REAL,
     rating_update_date DATE,
@@ -108,3 +108,19 @@ CREATE TABLE user_similarity (
     FOREIGN KEY (user_id_2) REFERENCES users(user_id) ON DELETE CASCADE,
     CHECK (user_id_1 < user_id_2)
 );
+
+-- book match score for a user (one to many)
+CREATE TABLE matches (
+    user_id INTEGER,
+    work_id INTEGER,
+    match_score REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    PRIMARY KEY (user_id, work_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (work_id) REFERENCES books(work_id) ON DELETE CASCADE
+);
+
+-- indexing to make queries more efficient
+CREATE INDEX idx_user_matches ON user_book_matches(user_id);
+CREATE INDEX idx_work_matches ON user_book_matches(work_id);
+CREATE INDEX idx_match_score ON user_book_matches(match_score DESC);

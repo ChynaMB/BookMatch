@@ -1,6 +1,6 @@
 #TODO: fix this code and then integrate into reposotitories - can i use psycopg2 instead of psycopg
 import psycopg2
-from library.libraryConnection import connectToLibrary
+from database.libraryConnection import connectToLibrary
 
 class Library:
     def __init__(self, dsn):
@@ -24,3 +24,5 @@ class Library:
         except Exception as e:
             self.conn.rollback()
             raise RuntimeError(f"Database error: {e}")
+        
+    
