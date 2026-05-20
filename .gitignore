@@ -3,3 +3,8 @@ library.py
 database/library.py
 src/database/library.py
 BookMatch/src/database/library.py
+venv/
+.venv/
+__pycache__/
+*.pyc
+.envvenv/

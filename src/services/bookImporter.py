@@ -1,17 +1,17 @@
-from database.libraryConnection import connectToLibrary
-from database.library import Library
-from database.libraryConnection import connectToLibrary
-from database.repositories.authorsRepository import AuthorsRepository
-from database.repositories.subjectsRepository import SubjectsRepository
-from database.repositories.booksRepository import BooksRepository
+from src.database.repositories.authorsRepository import AuthorsRepository
+from src.database.repositories.subjectsRepository import SubjectsRepository
+from src.database.repositories.booksRepository import BooksRepository
+from src.services.embedder import Embedder
 import requests
 import time
 
 class BookImporter:
-    def __init__(self, isbns: list):
-        self.conn = connectToLibrary()
+    def __init__(self, conn, isbns: list):
+        self.conn = conn
         self.openLibraryURL = "https://openlibrary.org"
         self.booksRepo = BooksRepository(self.conn)
+        self.subjectsRepo = SubjectsRepository(self.conn)
+        self.embedder = Embedder(self.conn)
         self.isbns = isbns
         self.works = {}
 
@@ -72,7 +72,15 @@ class BookImporter:
 
             book_id = self.booksRepo.insertBook(workID, title, subtitle, description, isbn10, isbn13)
 
+            #add subjects to the database and link them to the book
+            #TODO: make subject handling more robust (e.g. handle duplicates, edge cases, etc.)
+            for subject in subjects:
+                self.subjectsRepo.addSubjectToBook(book_id, subject)
+
             #rating not required as they are pulled from the csv and updated separately
+
+            #create and add embedding and similarity scores for the new book
+            self.embedder.bookEmbedder(workID, title, subtitle, description, subjects)
             
             for author in authors:
                 author_key = author["author"]["key"]
@@ -84,9 +92,6 @@ class BookImporter:
                 author_data = author_response.json()
                 author_name = author_data.get("name", "Unknown Author")
                 author_id = AuthorsRepository(self.conn).getOrCreateAuthor(author_name)
-                
-            for subject in subjects:
-                subject_id = SubjectsRepository(self.conn).getOrCreateSubject(subject)
 
             time.sleep(1)  #sleep for a bit to avoid hitting API rate limits (1 second)   
 

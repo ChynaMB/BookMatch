@@ -1,5 +1,3 @@
-from sentence_transformers import SentenceTransformer
-
 class EmbeddingRepository:
     def __init__(self, conn):
         self.conn = conn
@@ -49,6 +47,39 @@ class EmbeddingRepository:
             """, (id1, id2, similarityScore))
         self.conn.commit()
         cur.close()
+
+    def getEmbedding(self, type, id) -> list:
+        """get a book or user embedding from the database"""
+        cur = self.conn.cursor()
+        if type == 'book':
+            cur.execute("""
+                SELECT embedding FROM book_embeddings
+                WHERE work_id = %s;
+            """, (id,))
+        elif type == 'user':
+            cur.execute("""
+                SELECT embedding FROM user_embeddings
+                WHERE user_id = %s;
+            """, (id,))
+        result = cur.fetchone()
+        cur.close()
+        return result[0]
+    
+    def getAllEmbeddings(self, type) -> dict:
+        """get all book or all user embeddings from the database
+        returns a dictionary of id: embedding pairs"""
+        cur = self.conn.cursor()
+        if type == 'book':
+            cur.execute("""
+                SELECT work_id, embedding FROM book_embeddings;
+            """)
+        elif type == 'user':
+            cur.execute("""
+                SELECT user_id, embedding FROM user_embeddings;
+            """)
+        results = cur.fetchall()
+        cur.close()
+        return {result[0]: result[1] for result in results}
 
 #when updating an embedding, we want to update the created_at timestamp 
 #we also have to update the similarity scores in the graph repository because they will be based on the old embedding, 

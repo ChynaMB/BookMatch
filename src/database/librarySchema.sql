@@ -112,6 +112,29 @@ CREATE TABLE user_similarity (
     CHECK (user_id_1 < user_id_2)
 );
 
+-- user subject graph nodes
+CREATE TABLE user_subject_nodes (
+    user_id INTEGER,
+    subject_id INTEGER,
+    frequency REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, subject_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(subject_id) ON DELETE CASCADE
+);
+
+-- user subject graph edges
+CREATE TABLE user_subject_graph (
+    user_id INTEGER,
+    subject_id_1 INTEGER,
+    subject_id_2 INTEGER,
+    weight REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, subject_id_1, subject_id_2),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id_1) REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id_2) REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    CHECK (subject_id_1 < subject_id_2)
+);
+
 -- book match score for a user (one to many)
 CREATE TABLE matches (
     user_id INTEGER,

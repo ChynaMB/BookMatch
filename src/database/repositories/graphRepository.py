@@ -1,9 +1,11 @@
+import networkx as nx
+
 class GraphRepository:
     def __init__(self, conn):
         self.conn = conn
 
 
-    # book similarity
+    # book similarity graph
     def upsertBookSimilarity(self, w1, w2, score):
         """insert the similarity score between two book embeddings,
         if a similarity score already exists then update it"""
@@ -33,7 +35,7 @@ class GraphRepository:
         return result
 
    
-    #user similarity
+    #user similarity graph
     def upsertUserSimilarity(self, user1, user2, score):
         """insert the similarity score between two user profile embeddings,
         if a similarity score already exists then update it """
@@ -60,3 +62,45 @@ class GraphRepository:
         result = cur.fetchall()
         cur.close()
         return result
+    
+    #TODO: Optimise and simplify this method
+    #subject graph
+    def addSubjectGraph(self, userID, graph: nx.Graph):
+        """add a subject graph to the database, replacing any existing graph"""
+        cur = self.conn.cursor()
+
+        # Clear old graph
+        cur.execute("""
+            DELETE FROM user_subject_graph
+            WHERE user_id = %s
+        """, (userID,))
+
+        cur.execute("""
+            DELETE FROM user_subject_nodes
+            WHERE user_id = %s
+        """, (userID,))
+
+        # Insert nodes
+        for subjectID, data in graph.nodes(data=True):
+            magnitude = data.get("magnitude", 0)
+
+            cur.execute("""
+                INSERT INTO user_subject_nodes (user_id, subject_id, magnitude)
+                VALUES (%s, %s, %s)
+            """, (userID, subjectID, magnitude))
+
+        # Insert edges
+        for subjectID1, subjectID2, data in graph.edges(data=True):
+            weight = data.get("weight", 0)
+
+            lowID = min(subjectID1, subjectID2)
+            highID = max(subjectID1, subjectID2)
+
+            cur.execute("""
+                INSERT INTO user_subject_graph 
+                    (user_id, subject_id_1, subject_id_2, weight)
+                VALUES (%s, %s, %s, %s)
+            """, (userID, lowID, highID, weight))
+
+        self.conn.commit()
+        cur.close()
