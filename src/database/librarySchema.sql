@@ -14,7 +14,8 @@ CREATE TABLE books (
     isbn13 TEXT,
     average_rating REAL,
     rating_update_date DATE,
-    rating_count INTEGER
+    rating_count INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- authors
@@ -77,6 +78,7 @@ CREATE INDEX idx_user_books_work ON user_books(work_id);
 CREATE TABLE book_embeddings (
     work_id TEXT PRIMARY KEY,
     embedding BYTEA,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (work_id) REFERENCES books(work_id) ON DELETE CASCADE
 );
 
@@ -84,6 +86,7 @@ CREATE TABLE book_embeddings (
 CREATE TABLE user_embeddings (
     user_id INTEGER PRIMARY KEY,
     embedding BYTEA,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 

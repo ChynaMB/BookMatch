@@ -1,17 +1,13 @@
 from services.subjectGraph import SubjectGraph
 
 class UserProfile:
-    def __init__(self, userID, fiveStarBookshelf, fourStarBookshelf, likedAuthors, 
+    def __init__(self, userID, fiveStarBooks, fourStarBooks, likedAuthors, 
                  fiveStarWeight, fourStarWeight, ceilingFactor: float, library):
         self.userID = userID
-        self.fiveStarBookshelf = fiveStarBookshelf
-        self.fourStarBookshelf = fourStarBookshelf
-        self.fiveStarBooks = self.getBookWorkIDsFromBookshelf(self.fiveStarBookshelf)
-        self.fourStarBooks = self.getBookWorkIDsFromBookshelf(self.fourStarBookshelf)
+        self.fiveStarBooks = fiveStarBooks
+        self.fourStarBooks = fourStarBooks
         self.likedAuthors = likedAuthors #key: author name, value: weighted occurence based on author's books in five star and four star bookshelves
-        self.fiveStarWeight = fiveStarWeight
-        self.fourStarWeight = fourStarWeight
-        self.ceilingFactor = ceilingFactor
+      
 
         #TODO: use threads to parallelise the creation of the subject graph and vector embedding
         self.subjectGraph = SubjectGraph(self.fiveStarBookshelf, self.fourStarBookshelf, fiveStarWeight, fourStarWeight, ceilingFactor, library).createSubjectGraph()
