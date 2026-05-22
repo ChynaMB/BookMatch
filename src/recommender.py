@@ -3,6 +3,7 @@ from src.services.csvImporter import CSVimporter
 from src.services.dataAnalyser import DataAnalyser
 from src.database.repositories.graphRepository import GraphRepository
 from database.repositories.bookshelfRepository import BookshelfRepository
+
  
 class Recommender:    
     def __init__(self, csv_path = None, fiveStarWeight=1, fourStarWeight=0.7, ceilingFactor=1.5):
@@ -98,14 +99,16 @@ class Recommender:
             if userSimilarityScore < self.minimumUserSimilarityThreshold:
                 continue
 
-            averageBookSimilarityScore = self.getAverageBookSimilarityScore()
+            lowestBookSimilarityScore = min(self.matches.values(), default=0)
+
+
             #for books that the similar user has rated 5 stars, increase their match score by a certain amount (relative to the user similarity score and the five star weight)
             highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,5)
             for book in highlyRatedBooks:
                 if book.getWorkID() in self.matches:
                     self.matches[book.getWorkID()] += userSimilarityScore * self.fiveStarWeight 
                 else:
-                    self.matches[book.getWorkID()] = averageBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
+                    self.matches[book.getWorkID()] = lowestBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
             
             #calculate match score based on the books the similar user has rated 4 stars (relative to the user similarity score and the four star weight)
             highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,4)
@@ -113,15 +116,7 @@ class Recommender:
                 if book.getWorkID() in self.matches:
                     self.matches[book.getWorkID()] += userSimilarityScore * self.fourStarWeight 
                 else:
-                    self.matches[book.getWorkID()] = averageBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
-
-    def getAverageBookSimilarityScore(self):
-        """Helper method to calculate the average book similarity score of the current matches."""
-        if len(self.matches) == 0:
-            return 0
-        totalSimilarityScore = sum(self.matches.values())
-        averageSimilarityScore = totalSimilarityScore / len(self.matches)
-        return averageSimilarityScore
+                    self.matches[book.getWorkID()] = lowestBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
 
     #STEP 3 - subject graph analysis
     #compare user subject graph to the subjects of each book in the matches
