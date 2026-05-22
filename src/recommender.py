@@ -1,79 +1,141 @@
-from BookMatch.userProfileGraph import UserProfileGraph
-from database.library import Library
-from services.userProfileGraph import UserProfileGraph
-from services.dataAnalyser import DataExtractor
-
-#TODO: change reccomender so it factors in the different match scores based on the different methods of generating matches 
-    
+from src.database.library import Library
+from src.services.csvImporter import CSVimporter
+from src.services.dataAnalyser import DataAnalyser
+from src.database.repositories.graphRepository import GraphRepository
+from database.repositories.bookshelfRepository import BookshelfRepository
+ 
 class Recommender:    
-    def __init__(self, csv_path:str):
+    def __init__(self, csv_path = None, fiveStarWeight=1, fourStarWeight=0.7, ceilingFactor=1.5):
+        self.validateCSVPath(csv_path)
+
         self.library = Library()
-        self.userProfileGraph = UserProfileGraph(self.library)
-        self.dataExtractor = DataExtractor(csv_path, self.library)
-        self.userProfile = self.dataExtractor.createUserProfile()
-        self.userID = self.userProfile.getUserID()
+        self.csvImporter = CSVimporter(self.library.conn, csv_path)
+        self.userID = self.csvImporter.getUserID()
+        self.dataAnalyser = DataAnalyser(
+            self.library.conn, self.userID, self.fiveStarWeight, self.fourStarWeight, self.ceilingFactor)
+        
+        self.graphRepo = GraphRepository(self.library.conn)
+        self.bookshelfRepo = BookshelfRepository(self.library.conn)
+
+        self.fiveStarWeight = fiveStarWeight
+        self.fourStarWeight = fourStarWeight
+        self.ceilingFactor = ceilingFactor #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
+    
+        self.minimumBookSimilarityThreshold = 0.5 #minimum similarity threshold for similar books (0-1)
+        self.minimumUserSimilarityThreshold = 0.8 #minimum similarity threshold for similar users (0-1)
 
         self.finalNumberOfMatches = 10 #number of matches to return to user
         self.baseNumberOfMatches = 50 #number of matches to generate from book embedding comparison
-        self.numOfSimilarBooks = 20 #number of similar books to retrieve from similar user matching
-        self.numOfSimilarUserProfiles = 20 #number of similar user profiles to retrieve from user profile graph
-        self.authorMatchWeight = 0.1 #weight to increase match score if a book is from a liked author
-        self.ratingMatchWeight = 0.1 #weight to increase match score based on average rating of the book
-
+        
         self.matches = {} #dictionary to store final matches (key: workID, value: match score)
 
-    #compare user profile embedding with book embeddings in database to generate match scores
-    #compare user profile embedding with other user profile embedding -> generate match score
-    #pull matches from highly similar users -> generate match scores
-    #if a match from similar user overlaps with match from database search -> increase its match score
-    #all matches are compiled -> increase match score if they are from a liked author (relative to author occurence)
-    #then use average rating of the book to change the match score (relative to the rating distribution of the books in the database, e.g. if a book has a rating of 4.5 and the average rating is 3.5, increase its match score by a certain amount)
-    #then sort the matches by match score and return the top N matches
-    #add user profile to database for future matching with other users
+    def recommend(self):
+        #import the user's csv data and add it to the library database
+        self.csvImporter.importCSV()
 
-    #TODO: create similarity inclusion threshold to only include matches that are above a certain similarity score 
-    # (e.g. only include books that have a match score above 0.7) - this can be applied to both book embedding comparison
-    #  and similar user matching
+        #analyse the user's data to find their liked authors, create their subject graph and create their user embedding
+        self.dataAnalyser.analyseUserData()
 
-    def generateRecommendations(self):
-        #generate match scores by comparing user profile embedding and book embeddings in database
-        bookMatches = self.userProfileGraph.getUserProfileSimilarBooks(self.userProfile, self.numOfSimilarBooks)
+        #find similar books based on the user's five and four star bookshelves and add them to the matches dictionary with their match scores
+        self.useSimilarBooks()
 
-        #generate match scores by comparing user profile embedding to other user profile embeddings in database
-        profileBookMatches = self.userProfileGraph.getSimilarBooksFomUserProfileMatch(self.userProfile, self.numOfSimilarUserProfiles, self.numOfSimilarBooks)    
+        #find similar users based on the user's profile embedding and add their highly rated books to the matches dictionary 
+        self.useSimilarUsers()
+        
+     
+    #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
+    def validateCSVPath(self, csv_path):
+        if csv_path is None:
+            raise ValueError("CSV path cannot be None.")
 
-        #generate match scores by comparing user profile subject graph to book subjects in database
-        subjectBookMatches = self.userProfile.subjectGraph.subjectGraphComparator() # type: ignore
+    #STEP 1 - similar books   
+    #fill the matches dictionary with matches and their match scores (key: workID, value: match score)
+    #these matches should meet the minimum similarity threshold 
+    def useSimilarBooks(self):
+        """Get a list of similar books based on the user's five and four star bookshelves. 
+        The top matches that meet the minimum similarity threshold are added to the matches dictionary.
+        similarity score is increased for matches to five star books compared to four star books 
+        based on the weights set in the constructor."""
+        
+        for book in self.dataAnalyser.fiveStarBookshelf :
+            similarBooks = self.graphRepo.getSimilarBooks(book.getWorkID())
+            top50SimilarBooks = similarBooks[:self.baseNumberOfMatches] #get the top 50 similar books
+            for similarBook, similarityScore in top50SimilarBooks:
+                if similarityScore >= self.minimumBookSimilarityThreshold:
+                    if similarBook in self.matches:
+                        self.matches[similarBook] += similarityScore * self.fiveStarWeight
+                    else:
+                        self.matches[similarBook] = similarityScore * self.fiveStarWeight
 
-        #combine matches from book embedding comparison and similar user matching - increase match score if a match is found in both
-        combinedMatches = {}
-        for workID, matchScore in bookMatches:
-            if workID in profileBookMatches:
-                combinedMatches[workID] = matchScore + profileBookMatches[workID] + subjectBookMatches[workID]  #increase match score if found in both
+        for book in self.dataAnalyser.fourStarBookshelf :
+            similarBooks = self.graphRepo.getSimilarBooks(book.getWorkID())
+            top50SimilarBooks = similarBooks[:self.baseNumberOfMatches] #get the top 50 similar books
+            for similarBook, similarityScore in top50SimilarBooks:
+                if similarityScore >= self.minimumBookSimilarityThreshold:
+                    if similarBook in self.matches:
+                        self.matches[similarBook] += similarityScore * self.fourStarWeight
+                    else:
+                        self.matches[similarBook] = similarityScore * self.fourStarWeight
 
-        #increase match score for books from liked authors
-        likedAuthors = self.userProfile.getLikedAuthors()
-        for workID in combinedMatches:
-            bookAuthor = self.library.getAuthorsFromBookData([workID])[0] #get author of the book
-            if bookAuthor in likedAuthors:
-                combinedMatches[workID] += self.authorMatchWeight * likedAuthors.count(bookAuthor)  #increase match score based on number of times author is liked
 
-        #adjust match score based on average rating of the book
-        finalMatches = {}
-        for workID, matchScore in combinedMatches.items():
-            averageRating = self.library.getAverageRatingsFromBookData([workID])[0]
-            if averageRating is not None:
-                matchScore += (averageRating * self.ratingMatchWeight)  #increase match score based on average rating of the book
-            finalMatches[workID] = matchScore
+    #STEP 2 - similar users
+    #then look at similiar users that meet the minimum usersimilarity threshold and pull their highly rated books 
+    #if any of these books overlap with the matches from step 1, increase their match score by a certain amount (e.g. 10%)
+    #then add to the current list of matches
+    #it doesnt matter if we exceed the base number of matches at this point as we will be filtering them down later
+    def useSimilarUsers(self):
+        """Get a list of similar users based on the user's profile embedding. 
+        The top similar users that meet the minimum similarity threshold are analysed to find their highly rated books. 
+        If any of these books overlap with the matches from step 1, their match score is increased by user similarity weight. 
+        These books are then added to the current list of matches.
+        the more similar the user, the higher the increase in match score 
+        (e.g. if a user has a similarity score of 0.8, increase the match score of their highly rated books by 0.8*userSimilarityWeight)"""
+        similarUsers = self.graphRepo.getSimilarUsers(self.userID)
+        for similarUser, userSimilarityScore in similarUsers:
+            
+            similarUserID = similarUser[0] if similarUser[0] != self.userID else similarUser[1] #get the ID of the similar user (similarUser is a tuple of (user_id_1, user_id_2))
+            
+            if userSimilarityScore < self.minimumUserSimilarityThreshold:
+                continue
 
-        #sort matches by match score and return top N=finalNumberOfMatches matches
-        sortedFinalMatches = sorted(finalMatches.items(), key=lambda x: x[1], reverse=True)
-        finalMatches = {}
-        for i in range(min(self.finalNumberOfMatches, len(sortedFinalMatches))):
-            workID, matchScore = sortedFinalMatches[i]
-            finalMatches[workID] = matchScore
+            averageBookSimilarityScore = self.getAverageBookSimilarityScore()
+            #for books that the similar user has rated 5 stars, increase their match score by a certain amount (relative to the user similarity score and the five star weight)
+            highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,5)
+            for book in highlyRatedBooks:
+                if book.getWorkID() in self.matches:
+                    self.matches[book.getWorkID()] += userSimilarityScore * self.fiveStarWeight 
+                else:
+                    self.matches[book.getWorkID()] = averageBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
+            
+            #calculate match score based on the books the similar user has rated 4 stars (relative to the user similarity score and the four star weight)
+            highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,4)
+            for book in highlyRatedBooks:
+                if book.getWorkID() in self.matches:
+                    self.matches[book.getWorkID()] += userSimilarityScore * self.fourStarWeight 
+                else:
+                    self.matches[book.getWorkID()] = averageBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
 
-        self.library.closeConnection()
-        return finalMatches
+    def getAverageBookSimilarityScore(self):
+        """Helper method to calculate the average book similarity score of the current matches."""
+        if len(self.matches) == 0:
+            return 0
+        totalSimilarityScore = sum(self.matches.values())
+        averageSimilarityScore = totalSimilarityScore / len(self.matches)
+        return averageSimilarityScore
+
+    #STEP 3 - subject graph analysis
+    #compare user subject graph to the subjects of each book in the matches
+    #factor in node frequencies and edge weights in the subject graph 
+
+    #STEP 4 - liked authors
+    #then look at the authors of the matches and if any of them are in the user's liked authors, increase their match score by a certain amount (relative to the author's occurence in the liked authors)
+   
+    #STEP 5 - rating analysis
+    #then look at the average rating of the matches and 
+        #if they are above a certain threshold (e.g. 4), increase their match score by a certain amount 
+        #(relative to the rating distribution of the books in the database, 
+        #e.g. if a book has a rating of 4.5 and the average rating is 3.5, increase its match score by a certain amount)
+  
+
         
     

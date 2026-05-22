@@ -1,11 +1,9 @@
-from database.library import Library
-from database.libraryConnection import connectToLibrary
-from database.repositories.usersRepository import UsersRepository
-from database.repositories.booksRepository import BooksRepository
-from database.repositories.authorsRepository import AuthorsRepository
-from database.repositories.bookshelfRepository import BookshelfRepository
-from database.library import Library
-from services.bookImporter import BookImporter
+
+from src.database.repositories.usersRepository import UsersRepository
+from src.database.repositories.booksRepository import BooksRepository
+from src.database.repositories.authorsRepository import AuthorsRepository
+from src.database.repositories.bookshelfRepository import BookshelfRepository
+from src.services.bookImporter import BookImporter
 import pandas as pd
 import requests
 
@@ -27,7 +25,7 @@ class CSVimporter:
         print(f"Extracted {len(self.isbns)} ISBNs from CSV.")
         print(f"Most recent date in CSV: {self.mostRecentDate}")
 
-        bookImporter = BookImporter(self.isbns)
+        bookImporter = BookImporter(self.conn, self.isbns)
         print("Fetching work IDs for ISBNs and adding new books to the library...")
         bookImporter.importBooks()
         print("Finished importing books from CSV.")

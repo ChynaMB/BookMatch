@@ -34,7 +34,7 @@ class GraphRepository:
         cur.close()
         return result
 
-   
+
     #user similarity graph
     def upsertUserSimilarity(self, user1, user2, score):
         """insert the similarity score between two user profile embeddings,

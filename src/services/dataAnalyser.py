@@ -15,7 +15,7 @@ and to identify liked authors based on the user's ratings.
 """
 
 class DataAnalyser:
-    def __init__(self, conn, user_id, fiveStarWeight=1, fourStarWeight=0.7, ceilingFactor=1.5):
+    def __init__(self, conn, user_id, fiveStarWeight, fourStarWeight, ceilingFactor):
         self.userID = user_id
         self.bookshelfRepo = BookshelfRepository(conn)
         self.embeddingRepo = EmbeddingRepository(conn)
@@ -30,7 +30,7 @@ class DataAnalyser:
         self.likedAuthors = {} #key: author name, value: weighted occurence based on author's books in five star and four star bookshelves
         self.subjectGraph = None #type: nx.Graph
 
-    def getLikedAuthors(self):
+    def findLikedAuthors(self):
         """Return a dictionairy of liked authors based on the frequency of authors in the 4 and 5 star ratings"""
         fiveStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.fiveStarWeight, self.userID)
         fourStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.fourStarWeight, self.userID)
@@ -49,10 +49,10 @@ class DataAnalyser:
 
         self.likedAuthors = authorFrequency
 
-    def getRatedBooks(self):
+    def findRatedBooks(self):
         """get a list of workIDs for the books the user has rated 4 or 5 stars"""
-        self.fiveStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,self.fiveStarWeight)
-        self.fourStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,self.fourStarWeight)
+        self.fiveStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,5)
+        self.fourStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,4)
 
     #TODO: Clean up and optimise this method - especially the if-else statements in the loops
     def createUserEmbedding(self):
@@ -152,7 +152,17 @@ class DataAnalyser:
 
     def analyseUserData(self):
         """analyse the user's data to create a user profile with a subject graph and vector embedding"""
-        self.getLikedAuthors()
-        self.getRatedBooks()
+
+        print("analysing user data...")
+        self.findLikedAuthors()
+        print("liked authors have been identified")
+
+        self.findRatedBooks()
+        print("rated books have been identified")
+
         self.createUserEmbedding()
+        print("user embedding has been created")
+
         self.createSubjectGraph()
+        print("subject graph has been created")
+        print("finished analysing user data")
