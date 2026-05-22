@@ -34,5 +34,17 @@ class AuthorsRepository:
         self.conn.commit()
         cur.close()
         
-   
-        
+    def getBookAuthors(self, work_id):
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT authors.name
+            FROM authors
+            JOIN book_authors
+            ON authors.author_id = book_authors.author_id
+            WHERE book_authors.work_id = %s;
+        """, (work_id,))
+
+        author_names = [row[0] for row in cur.fetchall()]
+        cur.close()
+        return author_names
+            
