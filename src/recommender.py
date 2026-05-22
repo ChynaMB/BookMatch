@@ -137,11 +137,15 @@ class Recommender:
         likedAuthors = self.dataAnalyser.likedAuthors
         for workID, matchScore in self.matches:
             authors = self.authorRepo.getBookAuthors(workID)
+            maxWeight = -1
             for author in authors:
                 if author not in likedAuthors:
                     continue
-                self.matches[workID] = matchScore + (matchScore * self.likedAuthorWeight)
-                break #no need to include every author, as it may overly skew a match score
+                maxWeight = max(maxWeight,likedAuthors[author])
+            if maxWeight = -1:
+                continue
+            self.matches[workID] += maxWeight
+                
                    
     #STEP 5 - rating analysis
     #then look at the average rating of the matches and 
