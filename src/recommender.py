@@ -142,10 +142,9 @@ class Recommender:
                 if author not in likedAuthors:
                     continue
                 maxWeight = max(maxWeight,likedAuthors[author])
-            if maxWeight = -1:
+            if maxWeight == -1:
                 continue
             self.matches[workID] += maxWeight
-                
                    
     #STEP 5 - rating analysis
     #then look at the average rating of the matches and 

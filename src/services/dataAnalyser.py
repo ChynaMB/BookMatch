@@ -1,8 +1,7 @@
-import pandas as pd
+from collections import Counter
 import networkx as nx
 from itertools import combinations
 import numpy as np
-import requests
 from database.repositories.booksRepository import BooksRepository
 from src.database.repositories.bookshelfRepository import BookshelfRepository
 from src.database.repositories.embeddingRepository import EmbeddingRepository
@@ -90,65 +89,57 @@ class DataAnalyser:
     def createSubjectGraph(self):
         """
         Build a subject graph from a user's book subjects.
-        - Nodes: subjects with 'frequency' attribute (capped)
-        - Edges: co-occurrence of subjects in the same book (capped)
-        - Ceiling calculated as mean + k * standard deviation
+        Nodes:  subjects with a 'frequency' attribute (capped)
+        Edges:  subject co-occurrence within the same book (capped)
+        Ceiling: mean + ceilingFactor * standard deviation
         """
-        
-        nodeFrequency = {}    
-        edgeWeights = {}
-
-        # Step 1: collect frequencies and edge co-occurrences
-        for book in self.fiveStarBookshelf:
-            subjects = book.getSubjects()
-            for subject in subjects:
-                nodeFrequency[subject] = nodeFrequency.get(subject, 0) + self.fiveStarWeight 
-
-            # Edge weights: for each unique pair of subjects in this book, increment co-occurrence count
-            for subject1, subject2 in combinations(set(subjects), 2):
-                edgeWeights[(subject1, subject2)] = edgeWeights.get((subject1, subject2), 0) + self.fiveStarWeight
-
-        for book in self.fourStarBookshelf:
-            subjects = book.getSubjects()
-            for subject in subjects:
-                nodeFrequency[subject] = nodeFrequency.get(subject, 0) + self.fourStarWeight
-
-            for subject1, subject2 in combinations(set(subjects), 2):
-                edgeWeights[(subject1, subject2)] = edgeWeights.get((subject1, subject2), 0) + self.fourStarWeight
-
-        # Step 2: compute dynamic ceilings
-        if nodeFrequency:
-            frequency = np.array(list(nodeFrequency.values())) # Convert frequencies to numpy array for mean/std calculation
-            meanFrequency = frequency.mean() # Calculate mean frequency of subjects
-            frequencyStandardDeviation = frequency.std()# Calculate standard deviation of frequencies
-            maxNodeFreq = meanFrequency + self.ceilingFactor * frequencyStandardDeviation  # node frequency ceiling
-        else:
-            maxNodeFreq = 0 #If there are no nodes, set ceiling to 0 to avoid adding any nodes
-
-        if edgeWeights:
-            edgeOccurences = np.array(list(edgeWeights.values())) # Convert edge co-occurrence counts to numpy array for mean/std calculation
-            meanEdgeOccurence = edgeOccurences.mean() # Calculate mean co-occurrence count for edges
-            edgeOccurenceStandardDeviation = edgeOccurences.std() # Calculate standard deviation of edge co-occurrence counts
-            maxEdgeWeight = meanEdgeOccurence + self.ceilingFactor * edgeOccurenceStandardDeviation  # edge weight ceiling
-        else:
-            maxEdgeWeight = 0 # If there are no edges, set ceiling to 0 to avoid adding any edges
-
-        # Step 3: build the graph with capped nodes and edges
+        nodeFrequency: Counter = Counter()
+        edgeWeights:   Counter = Counter()
+    
+        # --- Step 1: collect frequencies and co-occurrences ---
+        bookshelves = [
+            (self.fiveStarBookshelf, self.fiveStarWeight),
+            (self.fourStarBookshelf, self.fourStarWeight),
+        ]
+    
+        for shelf, weight in bookshelves:
+            for book in shelf:
+                subjects = book.getSubjects()
+    
+                if not subjects:
+                    continue  # skip books with no subject data
+    
+                unique_subjects = set(subjects)
+    
+                for subject in unique_subjects:
+                    nodeFrequency[subject] += weight
+    
+                for subject1, subject2 in combinations(unique_subjects, 2):
+                    edgeWeights[(subject1, subject2)] += weight
+    
+        # --- Step 2: compute dynamic ceilings ---
+        maxNodeFreq  = self.computeCeiling(list(nodeFrequency.values())) if nodeFrequency else 0
+        maxEdgeWeight = self.computeCeiling(list(edgeWeights.values())) if edgeWeights else 0
+    
+        # --- Step 3: build the graph with capped values ---
         subjectGraph = nx.Graph()
-
-        # Add nodes with capped frequencies
+    
         for subject, freq in nodeFrequency.items():
-            capped_freq = min(freq, maxNodeFreq)   # apply ceiling
-            subjectGraph.add_node(subject, frequency=capped_freq)
-
-        # Add edges with capped weights
-        for (subject1, subject2), w in edgeWeights.items():
-            if subject1 in subjectGraph.nodes and subject2 in subjectGraph.nodes:
-                capped_w = min(w, maxEdgeWeight)  # apply ceiling
-                subjectGraph.add_edge(subject1, subject2, weight=capped_w)
-
+            subjectGraph.add_node(subject, frequency=min(freq, maxNodeFreq))
+    
+        for (subject1, subject2), weight in edgeWeights.items():
+            # Both nodes are guaranteed to exist, but guard defensively
+            if subject1 in subjectGraph and subject2 in subjectGraph:
+                subjectGraph.add_edge(subject1, subject2, weight=min(weight, maxEdgeWeight))
+    
+        # --- Step 4: save graph ---
         self.subjectGraph = subjectGraph
         self.graphRepo.addSubjectGraph(self.userID, subjectGraph)
+ 
+    def computeCeiling(self, values: list) -> float:
+        """Return mean + k * std for a list of numeric values."""
+        arr = np.array(values)
+        return arr.mean() + self.ceilingFactor * arr.std()
 
     def analyseUserData(self):
         """analyse the user's data to create a user profile with a subject graph and vector embedding"""
