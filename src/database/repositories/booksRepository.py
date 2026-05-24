@@ -1,4 +1,4 @@
-from models.book import Book
+from src.dtos.book import Book
 
 class BooksRepository:
     def __init__(self, conn):
@@ -40,6 +40,17 @@ class BooksRepository:
         """, (title, work_id))
         self.conn.commit()
         cur.close()
+
+    def getAverageBookRating(self, work_id):
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT average_rating
+            FROM books
+            WHERE work_id = %s;
+        """,(work_id))
+        result = cur.fetchone()
+        cur.close()
+        return result[0] if result else None
 
     def getBookByWorkID(self, work_id):
         cur = self.conn.cursor()

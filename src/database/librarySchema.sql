@@ -1,3 +1,16 @@
+-- library
+CREATE TABLE library_data (
+    num_of_books INTEGER NOT NULL DEFAULT 0,
+    num_of_users INTEGER NOT NULL DEFAULT 0,
+    num_of_authors INTEGER NOT NULL DEFAULT 0,
+    num_of_subjects INTEGER NOT NULL DEFAULT 0,
+
+    average_books_rating FLOAT,
+    average_books_rating_count REAL,
+
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- users
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,

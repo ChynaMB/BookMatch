@@ -4,10 +4,12 @@ from src.services.dataAnalyser import DataAnalyser
 from src.database.repositories.graphRepository import GraphRepository
 from src.database.repositories.bookshelfRepository import BookshelfRepository
 from src.database.repositories.authorsRepository import AuthorsRepository
+from src.database.repositories.booksRepository import BooksRepository
+from src.database.repositories.libraryDataRepository import LibraryDataRepository
 
  
 class Recommender:    
-    def __init__(self, csv_path = None, fiveStarWeight=1, fourStarWeight=0.7, likedAuthorWeight=0.2, ceilingFactor=1.5):
+    def __init__(self, csv_path = None):
         self.validateCSVPath(csv_path)
 
         self.library = Library()
@@ -19,14 +21,19 @@ class Recommender:
         self.graphRepo = GraphRepository(self.library.conn)
         self.bookshelfRepo = BookshelfRepository(self.library.conn)
         self.authorRepo = AuthorsRepository(self.library.conn)
+        self.booksRepo = BooksRepository(self.library.conn)
+        self.libraryDataRepo = LibraryDataRepository(self.library.conn)
 
-        self.fiveStarWeight = fiveStarWeight
-        self.fourStarWeight = fourStarWeight
-        self.likedAuthorWeight = likedAuthorWeight
-        self.ceilingFactor = ceilingFactor #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
+        self.fiveStarWeight = 1
+        self.fourStarWeight = 0.7
+        self.likedAuthorWeight = 0.2
+        self.ratingWeight = 0.2
+        self.ceilingFactor = 1.5 #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
     
         self.minimumBookSimilarityThreshold = 0.5 #minimum similarity threshold for similar books (0-1)
         self.minimumUserSimilarityThreshold = 0.8 #minimum similarity threshold for similar users (0-1)
+        self.averageRatingBaseline = 3.8
+        self.minimumAverageRating = 3.0
 
         self.finalNumberOfMatches = 10 #number of matches to return to user
         self.baseNumberOfMatches = 50 #number of matches to generate from book embedding comparison
@@ -52,7 +59,7 @@ class Recommender:
         self.useLikedAuthors()
 
         #increase the match scores of books with high average ratings and remove books with low average ratings
-        
+        self.useAverageRating()
      
     #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
     def validateCSVPath(self, csv_path):
@@ -148,10 +155,32 @@ class Recommender:
                    
     #STEP 5 - rating analysis
     #then look at the average rating of the matches and 
-        #if they are above a certain threshold (e.g. 4), increase their match score by a certain amount 
-        #(relative to the rating distribution of the books in the database, 
-        #e.g. if a book has a rating of 4.5 and the average rating is 3.5, increase its match score by a certain amount)
-  
+    #if they are above a certain threshold (e.g. 4), increase their match score by a certain amount 
+    #relative to the rating distribution of the books in the database, 
+    #e.g. if a book has a rating of 4.5 and the average rating is 3.5, increase its match score by a certain amount)
+    def useAverageRating(self):
+        """
+        Boost match scores for books rated above the library average.
+        The boost is proportional to how far the book's rating exceeds the baseline.
+        """
+        averageRatingInLibrary = self.libraryDataRepo.getAverageBooksRating() or 0
+        baselineRating = max(self.averageRatingBaseline, averageRatingInLibrary)
 
-        
-    
+        toBeDeleted = []
+        for workID, matchScore in self.matches.items():
+            rating = self.booksRepo.getAverageBookRating(workID)
+            if not rating:
+                continue
+
+            if rating < self.minimumAverageRating:
+                toBeDeleted.append(workID)
+                continue
+
+            if rating < baselineRating:
+                continue
+
+            difference = rating - baselineRating
+            self.matches[workID] = matchScore + (self.ratingWeight * difference)
+
+        for workID in toBeDeleted:
+            del self.matches[workID]
