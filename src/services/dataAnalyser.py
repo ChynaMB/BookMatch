@@ -6,6 +6,7 @@ from database.repositories.booksRepository import BooksRepository
 from src.database.repositories.bookshelfRepository import BookshelfRepository
 from src.database.repositories.embeddingRepository import EmbeddingRepository
 from src.database.repositories.graphRepository import GraphRepository
+from src.services.embedder import Embedder
 
 """
 DataAnalyser class for analysing user data 
@@ -52,37 +53,6 @@ class DataAnalyser:
         """get a list of workIDs for the books the user has rated 4 or 5 stars"""
         self.fiveStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,5)
         self.fourStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,4)
-
-    #TODO: Clean up and optimise this method - especially the if-else statements in the loops
-    def createUserEmbedding(self):
-        """Uses the users five and four star books to create a vector embedding
-        representing the user's reading preferences. This is done by averaging the vector embeddings 
-        of the books in the five and four star bookshelves, with more weight given to the five star books."""
-        userProfileVectorEmbedding = []
-        for book in self.fiveStarBookshelf:
-            bookVector = self.embeddingRepo.getEmbedding('book', book.getWorkID())
-            for i, vectorEntry in enumerate(bookVector):
-                if len(userProfileVectorEmbedding) == 0:
-                    userProfileVectorEmbedding.append(vectorEntry * self.fiveStarWeight)
-                else:
-                    userProfileVectorEmbedding[i] += vectorEntry * self.fiveStarWeight
-
-        for book in self.fourStarBookshelf:
-            bookVector = self.embeddingRepo.getEmbedding('book', book.getWorkID())
-            for i, vectorEntry in enumerate(bookVector):
-                if len(userProfileVectorEmbedding) == 0:
-                    userProfileVectorEmbedding.append(vectorEntry * self.fourStarWeight)
-                else:
-                    userProfileVectorEmbedding[i] += vectorEntry * self.fourStarWeight
-        
-        totalWeight = len(self.fiveStarBookshelf) * self.fiveStarWeight + len(self.fourStarBookshelf) * self.fourStarWeight
-        if totalWeight == 0:
-            return None
-        
-        for i in range(len(userProfileVectorEmbedding)):
-            userProfileVectorEmbedding[i] = userProfileVectorEmbedding[i] / totalWeight
-
-        self.embeddingRepo.addUserEmbedding(self.userID, userProfileVectorEmbedding)
 
     #TODO: Clean up and optimise this method - especially the if-else statements in the loops
     #TODO: Also consider edge cases (e.g. no books, all books have the same subjects, etc.) and how to handle them.
@@ -151,8 +121,15 @@ class DataAnalyser:
         self.findRatedBooks()
         print("rated books have been identified")
 
-        self.createUserEmbedding()
-        print("user embedding has been created")
+        embedder = Embedder(
+            self.userID,
+            self.fiveStarWeight, 
+            self.fourStarWeight, 
+            self.fiveStarBookshelf,
+            self.fourStarBookshelf
+        )
+        embedder.createUserEmbedding()
+        print("user embedding has been created and stored in the database")
 
         self.createSubjectGraph()
         print("subject graph has been created")

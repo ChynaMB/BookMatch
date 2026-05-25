@@ -3,8 +3,6 @@ import networkx as nx
 class GraphRepository:
     def __init__(self, conn):
         self.conn = conn
-
-
     # book similarity graph
     def upsertBookSimilarity(self, w1, w2, score):
         """insert the similarity score between two book embeddings,
@@ -22,7 +20,6 @@ class GraphRepository:
     def getSimilarBooks(self, work_id) -> list[(tuple)]: 
         """Go through all the similarity scores connected to a book using their work id
         return all the rows in descending order (highest similiarity is first"""
-        
         cur = self.conn.cursor()
         cur.execute("""
             SELECT *

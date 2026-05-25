@@ -4,8 +4,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 class Embedder:
-    def __init__(self, conn):
+    def __init__(self, conn, userID = None, fiveStarWeight = None, fourStarWeight = None, 
+                 fiveStarBookshelf = None, fourStarBookshelf = None):
         self.embeddingRepo = EmbeddingRepository(conn)
+        self.userID = userID
+        self.fiveStarWeight = fiveStarWeight
+        self.fourStarWeight = fourStarWeight
+        self.fiveStarBookshelf = fiveStarBookshelf
+        self.fourStarBookshelf = fourStarBookshelf
         
     def embedder(self, text):
         """takes in a string of text and returns a vector embedding using the sentence transformer model"""
@@ -56,16 +62,53 @@ class Embedder:
                     print("Invalid type for similarity score, must be 'book' or 'user'.")
                     return
                 
-    def bookEmbedder(self, id, title, subtitle, description, subjects):
+    def bookEmbedder(self, workID, title, subtitle, description, subjects):
         """main method to create a vector embedding for a single book or user and store it in the database
         then calculate cosine similarity scores between the new embedding and all existing book/user embeddings in the database and store those similarity scores in the database as well"""
 
-        self.createBookEmbedding(id, title, subtitle, description, subjects)
+        self.createBookEmbedding(workID, title, subtitle, description, subjects)
        
-        newEmbedding = self.embeddingRepo.getEmbedding('book', id)
+        newEmbedding = self.embeddingRepo.getEmbedding('book', workID)
         if newEmbedding is not None:
             allEmbeddings = self.embeddingRepo.getAllEmbeddings('book')
             for otherID, otherEmbedding in allEmbeddings:
-                if otherID != id:
+                if otherID != workID:
                     similarityScore = self.calculateCosineSimilarity(newEmbedding, otherEmbedding)
-                    self.addSimilarityScore('book', id, otherID, similarityScore)    
+                    self.addSimilarityScore('book', workID, otherID, similarityScore)    
+
+    #TODO: Clean up and optimise this method - especially the if-else statements in the loops
+    def createUserEmbedding(self):
+        """Uses the users five and four star books to create a vector embedding
+        representing the user's reading preferences. This is done by averaging the vector embeddings 
+        of the books in the five and four star bookshelves, with more weight given to the five star books."""
+        #TODO: improve the validation and error handling on this
+        if (self.userID is None or self.fiveStarBookshelf is None or self.fourStarBookshelf is None 
+        or self.fiveStarWeight is None or self.fourStarWeight is None):
+            print("error: missing arguments for user embedding")
+            return
+
+        userProfileVectorEmbedding = []
+        for book in self.fiveStarBookshelf:
+            bookVector = self.embeddingRepo.getEmbedding('book', book.getWorkID())
+            for i, vectorEntry in enumerate(bookVector):
+                if len(userProfileVectorEmbedding) == 0:
+                    userProfileVectorEmbedding.append(vectorEntry * self.fiveStarWeight)
+                else:
+                    userProfileVectorEmbedding[i] += vectorEntry * self.fiveStarWeight
+
+        for book in self.fourStarBookshelf:
+            bookVector = self.embeddingRepo.getEmbedding('book', book.getWorkID())
+            for i, vectorEntry in enumerate(bookVector):
+                if len(userProfileVectorEmbedding) == 0:
+                    userProfileVectorEmbedding.append(vectorEntry * self.fourStarWeight)
+                else:
+                    userProfileVectorEmbedding[i] += vectorEntry * self.fourStarWeight
+        
+        totalWeight = len(self.fiveStarBookshelf) * self.fiveStarWeight + len(self.fourStarBookshelf) * self.fourStarWeight
+        if totalWeight == 0:
+            return None
+        
+        for i in range(len(userProfileVectorEmbedding)):
+            userProfileVectorEmbedding[i] = userProfileVectorEmbedding[i] / totalWeight
+
+        self.embeddingRepo.addUserEmbedding(self.userID, userProfileVectorEmbedding)

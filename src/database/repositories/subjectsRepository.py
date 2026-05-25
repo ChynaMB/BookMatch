@@ -31,3 +31,17 @@ class SubjectsRepository:
 
         self.conn.commit()
         cur.close()
+
+    def getBookSubjects(self, workID):
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT subjects.name
+            FROM subjects 
+            JOIN book_subjects
+            ON subjects.subject_id = book_subjects.subject_id
+            WHERE book_subjects.workID = %s;
+        """,(workID,))
+
+        results = cur.fetchall()
+        cur.close()
+        return [result[0] for result in results]
