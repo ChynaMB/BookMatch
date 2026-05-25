@@ -7,6 +7,7 @@ from src.database.repositories.subjectsRepository import SubjectsRepository
 from src.database.repositories.authorsRepository import AuthorsRepository
 from src.database.repositories.booksRepository import BooksRepository
 from src.database.repositories.libraryDataRepository import LibraryDataRepository
+from src.database.repositories.matchesRepository import MatchesRepository
 import networkx as nx
 
  
@@ -26,6 +27,7 @@ class Recommender:
         self.authorRepo = AuthorsRepository(self.library.conn)
         self.booksRepo = BooksRepository(self.library.conn)
         self.libraryDataRepo = LibraryDataRepository(self.library.conn)
+        self.matchesRepository = MatchesRepository(self.library.conn)
 
         self.fiveStarWeight = 1
         self.fourStarWeight = 0.7
@@ -42,10 +44,11 @@ class Recommender:
         self.averageRatingBaseline = 3.8
         self.minimumAverageRating = 3.0
 
+        self.baseNumberOfMatches = 100 #number of matches to initially generate using embeddings and graohs
         self.finalNumberOfMatches = 10 #number of matches to return to user
-        self.baseNumberOfMatches = 50 #number of matches to generate from book embedding comparison
         
         self.matches = {} #dictionary to store final matches (key: workID, value: match score)
+        self.finalMatches = []
 
     def recommend(self):
         #import the user's csv data and add it to the library database
@@ -63,11 +66,20 @@ class Recommender:
         #compare user subject graph to the subjects of eavch book in the library
         self.useSubjectGraph()
 
+        #reduce number of matches
+        self.matches = dict(self.reduceMatches(self.baseNumberOfMatches))
+
         #increase the match score of books written by authors the user likes
         self.useLikedAuthors()
 
         #increase the match scores of books with high average ratings and remove books with low average ratings
         self.useAverageRating()
+
+        #add matches to the database
+        self.addMatches()
+
+        #get final matches
+        self.finalMatches = self.getFinalMatches(self.finalNumberOfMatches)
      
     #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
     def validateCSVPath(self, csv_path):
@@ -185,11 +197,21 @@ class Recommender:
                     else:
                         self.matches[workID] = match_score
 
-    #STEP 4 - liked authors
+    #STEP 4 - reduce the number of matches
+    #reduce the number of matches at this stage for effienciency purposes.
+    #we have used the data to find the best matches
+    #any other thing done to the matches is to diffentiate between them
+    #not to find different matches
+    def reduceMatches(self, numOfMAtches):
+        sortedMatches = sorted(self.matches.items(), key=lambda x: x[1], reverse=True)
+        return sortedMatches[:numOfMAtches]
+        
+        
+    #STEP 5 - liked authors
     #then look at the authors of the matches and if any of them are in the user's liked authors, increase their match score by a certain amount (relative to the author's occurence in the liked authors)
     def useLikedAuthors(self):
         likedAuthors = self.dataAnalyser.likedAuthors
-        for workID, matchScore in self.matches:
+        for workID in self.matches.keys():
             authors = self.authorRepo.getBookAuthors(workID)
             maxWeight = -1
             for author in authors:
@@ -200,7 +222,7 @@ class Recommender:
                 continue
             self.matches[workID] += maxWeight
                    
-    #STEP 5 - rating analysis
+    #STEP 6 - rating analysis
     #then look at the average rating of the matches and 
     #if they are above a certain threshold (e.g. 4), increase their match score by a certain amount 
     #relative to the rating distribution of the books in the database, 
@@ -231,3 +253,22 @@ class Recommender:
 
         for workID in toBeDeleted:
             del self.matches[workID]
+
+    #STEP 7 - add user matches to the database
+    def addMatches(self):
+        matches = [(self.userID, workID, matchScore) for workID, matchScore in self.matches.items()]
+        self.matchesRepository.insertMatches(matches)
+
+    #STEP 8 - get the final matches
+    def getFinalMatches(self, numOfMAtches):
+        finalMatches = self.reduceMatches(self.finalNumberOfMatches)
+        userMatches = []
+        for workID, matchScore in finalMatches:
+            #bookName = get the book name
+            #authorNames = get the author names
+            #percentageScore = get the match score as a percentage
+            #userMatches.append((bookName,authorNames,percentageScore))
+        return userMatches
+        
+   
+
