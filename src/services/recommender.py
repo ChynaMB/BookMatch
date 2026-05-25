@@ -1,13 +1,13 @@
-from src.database.library import Library
+from src.library import Library
 from src.services.csvImporter import CSVimporter
 from src.services.dataAnalyser import DataAnalyser
-from src.database.repositories.graphRepository import GraphRepository
-from src.database.repositories.bookshelfRepository import BookshelfRepository
-from src.database.repositories.subjectsRepository import SubjectsRepository
-from src.database.repositories.authorsRepository import AuthorsRepository
-from src.database.repositories.booksRepository import BooksRepository
-from src.database.repositories.libraryDataRepository import LibraryDataRepository
-from src.database.repositories.matchesRepository import MatchesRepository
+from src.repositories.graphRepository import GraphRepository
+from src.repositories.bookshelfRepository import BookshelfRepository
+from src.repositories.subjectsRepository import SubjectsRepository
+from src.repositories.authorsRepository import AuthorsRepository
+from src.repositories.booksRepository import BooksRepository
+from src.repositories.libraryDataRepository import LibraryDataRepository
+from src.repositories.matchesRepository import MatchesRepository
 import networkx as nx
 
  

@@ -1,8 +1,8 @@
 
-from src.database.repositories.usersRepository import UsersRepository
-from src.database.repositories.booksRepository import BooksRepository
-from src.database.repositories.authorsRepository import AuthorsRepository
-from src.database.repositories.bookshelfRepository import BookshelfRepository
+from src.repositories.usersRepository import UsersRepository
+from src.repositories.booksRepository import BooksRepository
+from src.repositories.authorsRepository import AuthorsRepository
+from src.repositories.bookshelfRepository import BookshelfRepository
 from src.services.bookImporter import BookImporter
 import pandas as pd
 import requests

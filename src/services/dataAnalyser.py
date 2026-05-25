@@ -2,10 +2,10 @@ from collections import Counter
 import networkx as nx
 from itertools import combinations
 import numpy as np
-from database.repositories.booksRepository import BooksRepository
-from src.database.repositories.bookshelfRepository import BookshelfRepository
-from src.database.repositories.embeddingRepository import EmbeddingRepository
-from src.database.repositories.graphRepository import GraphRepository
+from src.repositories.booksRepository import BooksRepository
+from src.repositories.bookshelfRepository import BookshelfRepository
+from src.repositories.embeddingRepository import EmbeddingRepository
+from src.repositories.graphRepository import GraphRepository
 from src.services.embedder import Embedder
 
 """

@@ -1,6 +1,6 @@
-from src.database.repositories.authorsRepository import AuthorsRepository
-from src.database.repositories.subjectsRepository import SubjectsRepository
-from src.database.repositories.booksRepository import BooksRepository
+from src.repositories.authorsRepository import AuthorsRepository
+from src.repositories.subjectsRepository import SubjectsRepository
+from src.repositories.booksRepository import BooksRepository
 from src.services.embedder import Embedder
 import requests
 import time

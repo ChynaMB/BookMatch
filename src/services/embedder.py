@@ -1,4 +1,4 @@
-from database.repositories.embeddingRepository import EmbeddingRepository
+from src.repositories.embeddingRepository import EmbeddingRepository
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
