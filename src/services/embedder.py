@@ -40,6 +40,7 @@ class Embedder:
         else:
             print("One or both embeddings are None, cannot calculate cosine similarity.")
             return None
+        return None
 
     #TODO: improve this method to handle cases where the embedding does not exist for one or both of the books/users 
     # and create the embedding if it does not exist before trying to add the similarity score again
