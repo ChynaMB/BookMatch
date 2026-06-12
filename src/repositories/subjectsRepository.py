@@ -39,7 +39,7 @@ class SubjectsRepository:
             FROM subjects 
             JOIN book_subjects
             ON subjects.subject_id = book_subjects.subject_id
-            WHERE book_subjects.workID = %s;
+            WHERE book_subjects.work_id = %s;
         """,(workID,))
 
         results = cur.fetchall()

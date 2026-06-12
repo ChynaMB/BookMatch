@@ -2,10 +2,10 @@ from collections import Counter
 import networkx as nx
 from itertools import combinations
 import numpy as np
-from src.repositories.booksRepository import BooksRepository
 from src.repositories.bookshelfRepository import BookshelfRepository
 from src.repositories.embeddingRepository import EmbeddingRepository
 from src.repositories.graphRepository import GraphRepository
+from src.repositories.subjectsRepository import SubjectsRepository
 from src.services.embedder import Embedder
 
 """
@@ -20,6 +20,7 @@ class DataAnalyser:
         self.bookshelfRepo = BookshelfRepository(conn)
         self.embeddingRepo = EmbeddingRepository(conn)
         self.graphRepo = GraphRepository(conn)
+        self.subjectsRepo = SubjectsRepository(conn)
         
         self.fiveStarWeight = fiveStarWeight
         self.fourStarWeight = fourStarWeight
@@ -37,8 +38,8 @@ class DataAnalyser:
 
     def findLikedAuthors(self):
         """Return a dictionairy of liked authors based on the frequency of authors in the 4 and 5 star ratings"""
-        fiveStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.fiveStarWeight, self.userID)
-        fourStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.fourStarWeight, self.userID)
+        fiveStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.userID, 5)
+        fourStarAuthors = self.bookshelfRepo.getRatedAuthorsForUser(self.userID, 4)
 
         authorFrequency = {}
         for author in fiveStarAuthors:
@@ -74,7 +75,7 @@ class DataAnalyser:
     
         for shelf, weight in bookshelves:
             for book in shelf:
-                subjects = book.getSubjects()
+                subjects = self.subjectsRepo.getBookSubjects(book.getWorkID())
     
                 if not subjects:
                     continue  # skip books with no subject data

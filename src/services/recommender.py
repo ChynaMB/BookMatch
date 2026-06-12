@@ -1,5 +1,4 @@
 from src.database.library import Library
-from src.models.book import Book
 from src.services.csvImporter import CSVimporter
 from src.services.dataAnalyser import DataAnalyser
 from src.repositories.graphRepository import GraphRepository
@@ -16,20 +15,6 @@ class Recommender:
         self.file_contents = file_contents
         self.validateFileContents()
 
-        self.library = Library()
-        self.csvImporter = CSVimporter(self.library.conn, file_contents)
-        self.userID = self.csvImporter.getUserID()
-        self.dataAnalyser = DataAnalyser(
-            self.library.conn, self.userID, self.fiveStarWeight, self.fourStarWeight, self.ceilingFactor)
-        
-        self.graphRepo = GraphRepository(self.library.conn)
-        self.bookshelfRepo = BookshelfRepository(self.library.conn)
-        self.subjectsRepo = SubjectsRepository(self.library.conn)
-        self.authorRepo = AuthorsRepository(self.library.conn)
-        self.booksRepo = BooksRepository(self.library.conn)
-        self.libraryDataRepo = LibraryDataRepository(self.library.conn)
-        self.matchesRepository = MatchesRepository(self.library.conn)
-
         self.fiveStarWeight = 1
         self.fourStarWeight = 0.7
         self.likedAuthorWeight = 0.2
@@ -45,11 +30,24 @@ class Recommender:
         self.averageRatingBaseline = 3.8
         self.minimumAverageRating = 3.0
 
-
         self.baseNumberOfMatches = 100 #number of matches to initially generate using embeddings and graohs
         self.finalNumberOfMatches = 10 #number of matches to return to user
+
+        self.library = Library()
+        self.csvImporter = CSVimporter(self.library.conn, file_contents)
+        self.userID = self.csvImporter.getUserID()
+        self.dataAnalyser = DataAnalyser(
+            self.library.conn, self.userID, self.fiveStarWeight, self.fourStarWeight, self.ceilingFactor)
         
-        self.matches = {} #dictionary to store initial batch of matches (key: book, value: match score)
+        self.graphRepo = GraphRepository(self.library.conn)
+        self.bookshelfRepo = BookshelfRepository(self.library.conn)
+        self.subjectsRepo = SubjectsRepository(self.library.conn)
+        self.authorRepo = AuthorsRepository(self.library.conn)
+        self.booksRepo = BooksRepository(self.library.conn)
+        self.libraryDataRepo = LibraryDataRepository(self.library.conn)
+        self.matchesRepository = MatchesRepository(self.library.conn)
+
+        self.matches = {} # key: work_id, value: match score
         self.finalMatches = []
 
     #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
@@ -66,11 +64,11 @@ class Recommender:
         #find similar users based on the user's profile embedding and add their highly rated books to the matches dictionary 
         self.useSimilarUsers()
 
-        #compare user subject graph to the subjects of eavch book in the library
+        #compare user subject graph to the subjects of each book in the matches
         self.useSubjectGraph()
 
         #reduce number of matches
-        self.finalMatches = dict(self.reduceMatches(self.baseNumberOfMatches))
+        self.finalMatches = self.reduceMatches(self.baseNumberOfMatches)
 
         #increase the match score of books written by authors the user likes
         self.useLikedAuthors()
@@ -82,9 +80,9 @@ class Recommender:
         self.addMatches()
 
         #get final matches
-        userMatches = self.getFinalMatches(self.finalNumberOfMatches)
+        userMatches = self.getFinalMatches()
 
-        return userMatches #list of tuples (book, match score)
+        return userMatches #list of dicts with title, authors, matchScore
      
     #TODO: add a check to make sure file is a csv
     def validateFileContents(self):
@@ -110,29 +108,25 @@ class Recommender:
         similarity score is increased for matches to five star books compared to four star books 
         based on the weights set in the constructor."""
         
-        for book in self.dataAnalyser.fiveStarBookshelf :
-            similarBooksWorkIDS = self.graphRepo.getSimilarBooks(book.getWorkID())
-            for WorkID, similarityScore in similarBooksWorkIDS:
-                if similarityScore >= self.minimumBookSimilarityThreshold and self.isValidReccomendation(WorkID):
-                    similarBook = self.booksRepo.getBookByWorkID(WorkID)
-                    if similarBook not in self.matches:
-                        self.matches[similarBook] = similarityScore * self.fiveStarWeight
-                    else:
-                        break #dont include the same book multiple times
-                else:
-                    break #books in order of similarity, so break once we reach a book that doesnt meet the similarity threshold
+        for book in self.dataAnalyser.fiveStarBookshelf:
+            self._addSimilarBooksForSeed(book.getWorkID(), self.fiveStarWeight)
 
-        for book in self.dataAnalyser.fourStarBookshelf :
-            similarBooksWorkIDS = self.graphRepo.getSimilarBooks(book.getWorkID())
-            for WorkID, similarityScore in similarBooksWorkIDS:
-                if similarityScore >= self.minimumBookSimilarityThreshold and self.isValidReccomendation(WorkID):
-                    similarBook = self.booksRepo.getBookByWorkID(WorkID)
-                    if similarBook not in self.matches:
-                        self.matches[similarBook] = similarityScore * self.fourStarWeight
-                    else:
-                        break
-                else:
-                    break
+        for book in self.dataAnalyser.fourStarBookshelf:
+            self._addSimilarBooksForSeed(book.getWorkID(), self.fourStarWeight)
+
+    def _addSimilarBooksForSeed(self, seed_work_id, weight):
+        similar_books = self.graphRepo.getSimilarBooks(seed_work_id)
+        for work_id, similarity_score in similar_books:
+            if similarity_score < self.minimumBookSimilarityThreshold:
+                break
+
+            if not self.isValidReccomendation(work_id):
+                continue
+
+            if work_id in self.matches:
+                continue
+
+            self.matches[work_id] = similarity_score * weight
 
 
     #STEP 2 - similar users
@@ -147,30 +141,45 @@ class Recommender:
         These books are then added to the current list of matches.
         the more similar the user, the higher the increase in match score 
         (e.g. if a user has a similarity score of 0.8, increase the match score of their highly rated books by 0.8*userSimilarityWeight)"""
-        similarUsers = self.graphRepo.getSimilarUsers(self.userID)
-        lowestBookSimilarityScore = min(self.matches.values(), default=0)
-        for similarUser, userSimilarityScore in similarUsers:
-            
-            similarUserID = similarUser[0] if similarUser[0] != self.userID else similarUser[1] #get the ID of the similar user (similarUser is a tuple of (user_id_1, user_id_2))
-            
-            if userSimilarityScore < self.minimumUserSimilarityThreshold:
-                continue
+        similar_users = self.graphRepo.getSimilarUsers(self.userID)
+        lowest_book_similarity_score = min(self.matches.values(), default=0)
 
-            #for books that the similar user has rated 5 stars, increase their match score by a certain amount (relative to the user similarity score and the five star weight)
-            highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,5)
-            for book in highlyRatedBooks:
-                if book in self.matches:
-                    self.matches[book] += userSimilarityScore * self.fiveStarWeight 
-                else:
-                    self.matches[book] = lowestBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
-            
-            #calculate match score based on the books the similar user has rated 4 stars (relative to the user similarity score and the four star weight)
-            highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,4)
-            for book in highlyRatedBooks:
-                if book in self.matches:
-                    self.matches[book] += userSimilarityScore * self.fourStarWeight 
-                else:
-                    self.matches[book] = lowestBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
+        for similar_user_id, user_similarity_score in similar_users:
+            if user_similarity_score < self.minimumUserSimilarityThreshold:
+                break
+
+            self._addHighlyRatedBooksFromUser(
+                similar_user_id,
+                5,
+                user_similarity_score,
+                self.fiveStarWeight,
+                lowest_book_similarity_score,
+            )
+            self._addHighlyRatedBooksFromUser(
+                similar_user_id,
+                4,
+                user_similarity_score,
+                self.fourStarWeight,
+                lowest_book_similarity_score,
+            )
+
+    def _addHighlyRatedBooksFromUser(
+        self,
+        user_id,
+        rating,
+        user_similarity_score,
+        rating_weight,
+        lowest_book_similarity_score,
+    ):
+        highly_rated_books = self.bookshelfRepo.getRatedBooksForUser(user_id, rating)
+        score_delta = user_similarity_score * rating_weight
+
+        for book in highly_rated_books:
+            work_id = book.getWorkID()
+            if work_id in self.matches:
+                self.matches[work_id] += score_delta
+            else:
+                self.matches[work_id] = lowest_book_similarity_score + score_delta
 
     #STEP 3 - subject graph analysis
     #compare user subject graph to the subjects of each book in the matches
@@ -180,40 +189,33 @@ class Recommender:
     #TODO: Decrease the time complexity of this method by optimizing the way matches are calculated and stored.
     #TODO: Also make data retrieval more efficient 
     def useSubjectGraph(self):
-        """This method is used to compare the subject graph of the user profile with the subjects
-          of the books in the database and generate match scores."""
-        #how many of the subjects in the book are also in the user profile subject graph? 
+        """Compare the user's subject graph to candidate book subjects and add subject-based scores."""
+        subject_graph = self.dataAnalyser.subjectGraph
+        if subject_graph is None or subject_graph.number_of_nodes() == 0:
+            return
 
-        subjectGraph = self.dataAnalyser.subjectGraph
+        node_frequency = {node: data['frequency'] for node, data in subject_graph.nodes(data=True)}
+        eigenvector_centrality = nx.eigenvector_centrality(subject_graph, max_iter=1000)
 
-        #and weight those subjects based on their importance in the user profile graph 
-        #the weighting is based on three factors: 
-        # 1)  node frequency - how many times the subject appears in the user's reading history
-        self.nodeFrequency = {node: data['frequency'] for node, data in subjectGraph.nodes(data=True)}
-        # 2) graph centrality - how central the subject is in the graph structure (e.g. using eigenvector centrality or betweenness centrality)
-        self.eigenvectorCentrality = nx.eigenvector_centrality(subjectGraph, max_iter=1000) # Calculate eigenvector centrality for each node in the graph
-        # 3) edge weights - how strongly the subject is connected to other subjects in the graph (e.g. using edge weights or co-occurrence counts) - this can be calculated as the sum of the weights of the edges connected to the node
-
-        books = self.booksRepo.getAllBooks()
-
-        for book in books:
-            workID = book.getWorkID()
-            subjects = self.subjectsRepo.getBookSubjects(workID)
+        for work_id in list(self.matches.keys()):
+            subjects = self.subjectsRepo.getBookSubjects(work_id)
             for subject in subjects:
-                if subject in subjectGraph.nodes:
-                    # Calculate match score based on node frequency, eigenvector centrality, and edge weights
-                    node_freq = self.nodeFrequency.get(subject, 0)
-                    centrality = self.eigenvectorCentrality.get(subject, 0)
-                    edge_weight_sum = sum(subjectGraph[subject][neighbor]['weight'] for neighbor in subjectGraph.neighbors(subject))
-                    
-                    # Combine these factors into a single match score (this is a simple example, you can experiment with different formulas)
-                    match_score = node_freq * self.nodeFrequencyWeight + centrality * self.centralityWeight + edge_weight_sum * self.edgeWeightWeight
-                    
-                    # Store the match score for this book (you may want to aggregate scores if multiple subjects match)
-                    if workID in self.matches:
-                        self.matches[workID] += match_score
-                    else:
-                        self.matches[workID] = match_score
+                if subject not in subject_graph.nodes:
+                    continue
+
+                node_freq = node_frequency.get(subject, 0)
+                centrality = eigenvector_centrality.get(subject, 0)
+                edge_weight_sum = sum(
+                    subject_graph[subject][neighbor]['weight']
+                    for neighbor in subject_graph.neighbors(subject)
+                )
+
+                match_score = (
+                    node_freq * self.nodeFrequencyWeight
+                    + centrality * self.centralityWeight
+                    + edge_weight_sum * self.edgeWeightWeight
+                )
+                self.matches[work_id] += match_score
 
     #STEP 4 - reduce the number of matches
     #reduce the number of matches at this stage for effienciency purposes.
@@ -221,29 +223,30 @@ class Recommender:
     #any other thing done to the matches is to diffentiate between them
     #not to find different matches
     def reduceMatches(self, numOfMAtches) -> list:
-        sortedMatches = sorted(self.matches.items(), key=lambda x: x[1], reverse=True)
-        return sortedMatches[:numOfMAtches] #list of tuples (book, match score)
+        sorted_matches = sorted(self.matches.items(), key=lambda x: x[1], reverse=True)
+        return sorted_matches[:numOfMAtches] #list of tuples (work_id, match score)
         
         
     #STEP 5 - liked authors
     #then look at the authors of the matches and if any of them are in the user's liked authors, increase their match score by a certain amount (relative to the author's occurence in the liked authors)
     def useLikedAuthors(self):
-        likedAuthors = self.dataAnalyser.likedAuthors
-        for i in range(len(self.finalMatches)):
-            book = self.finalMatches[i][0]
-            matchScore = self.finalMatches[i][1]
+        liked_authors = self.dataAnalyser.likedAuthors
+        for i, (work_id, match_score) in enumerate(self.finalMatches):
+            authors = self.authorRepo.getBookAuthors(work_id)
 
-            workID = book.getWorkID()
-            authors = self.authorRepo.getBookAuthors(workID)
-
-            maxWeight = -1
+            max_weight = -1
             for author in authors:
-                if author not in likedAuthors:
+                if author not in liked_authors:
                     continue
-                maxWeight = max(maxWeight,likedAuthors[author])
-            if maxWeight == -1:
+                max_weight = max(max_weight, liked_authors[author])
+
+            if max_weight == -1:
                 continue
-            self.finalMatches[i] = (book, matchScore + maxWeight)
+
+            self.finalMatches[i] = (
+                work_id,
+                match_score + (max_weight * self.likedAuthorWeight),
+            )
 
     #STEP 6 - rating analysis
     #then look at the average rating of the matches and 
@@ -255,50 +258,52 @@ class Recommender:
         Boost match scores for books rated above the library average.
         The boost is proportional to how far the book's rating exceeds the baseline.
         """
-        averageRatingInLibrary = self.libraryDataRepo.getAverageBooksRating() or 0
-        baselineRating = max(self.averageRatingBaseline, averageRatingInLibrary)
+        average_rating_in_library = self.libraryDataRepo.getAverageBooksRating() or 0
+        baseline_rating = max(self.averageRatingBaseline, average_rating_in_library)
 
-        toBeDeleted = []
-        for i in range(len(self.finalMatches)):
-            book, matchScore = self.finalMatches[i]
-            workID = book.getWorkID()
-            rating = self.booksRepo.getAverageBookRating(workID)
+        to_be_deleted = []
+        for i, (work_id, match_score) in enumerate(self.finalMatches):
+            rating = self.booksRepo.getAverageBookRating(work_id)
             if not rating:
-                toBeDeleted.append(workID)
+                to_be_deleted.append(work_id)
                 continue
 
             if rating < self.minimumAverageRating:
-                toBeDeleted.append(workID)
+                to_be_deleted.append(work_id)
                 continue
 
-            if rating < baselineRating:
+            if rating < baseline_rating:
                 continue
 
-            difference = rating - baselineRating
-            self.finalMatches[i] = (book, matchScore + (self.ratingWeight * difference))
+            difference = rating - baseline_rating
+            self.finalMatches[i] = (work_id, match_score + (self.ratingWeight * difference))
             
-        for workID in toBeDeleted:
-            self.finalMatches = [match for match in self.finalMatches if match[0].getWorkID() != workID]
+        if to_be_deleted:
+            deleted = set(to_be_deleted)
+            self.finalMatches = [
+                match for match in self.finalMatches if match[0] not in deleted
+            ]
 
     #STEP 7 - add user matches to the database
     def addMatches(self):
-        matches = [(self.userID, book.getWorkID(), matchScore) for book, matchScore in self.finalMatches]
+        matches = [(self.userID, work_id, match_score) for work_id, match_score in self.finalMatches]
         self.matchesRepository.insertMatches(matches)
 
     #STEP 8 - get the final matches
     def getFinalMatches(self) -> list:
-        finalMatches = self.reduceMatches(self.finalNumberOfMatches)
-        userMatches = []
-        for book, matchScore in finalMatches:
-            dict = {}
-            dict["title"] = book.getTitle()
-            dict["authors"] = []
-            for author in self.authorRepo.getBookAuthors(book.getWorkID()):
-                dict["authors"].append(author.getName())
-            dict["matchScore"] = matchScore
-            userMatches.append(dict)
-        return userMatches
+        sorted_final_matches = sorted(self.finalMatches, key=lambda x: x[1], reverse=True)
+        top_matches = sorted_final_matches[:self.finalNumberOfMatches]
 
-        
-   
+        user_matches = []
+        for work_id, match_score in top_matches:
+            book = self.booksRepo.getBookByWorkID(work_id)
+            if book is None:
+                continue
 
+            user_matches.append({
+                "title": book.getTitle(),
+                "authors": self.authorRepo.getBookAuthors(work_id),
+                "matchScore": match_score,
+            })
+
+        return user_matches

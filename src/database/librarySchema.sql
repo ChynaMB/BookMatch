@@ -84,8 +84,8 @@ CREATE TABLE user_bookshelf (
 );
 
 -- indexing to make queries more efficient
-CREATE INDEX idx_user_books_user ON user_books(user_id);
-CREATE INDEX idx_user_books_work ON user_books(work_id);
+CREATE INDEX idx_user_bookshelf_user ON user_bookshelf(user_id);
+CREATE INDEX idx_user_bookshelf_work ON user_bookshelf(work_id);
 
 -- book embeddings
 CREATE TABLE book_embeddings (
@@ -153,13 +153,13 @@ CREATE TABLE matches (
     user_id INTEGER,
     work_id INTEGER,
     match_score REAL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, work_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (work_id) REFERENCES books(work_id) ON DELETE CASCADE
 );
 
 -- indexing to make queries more efficient
-CREATE INDEX idx_user_matches ON user_book_matches(user_id);
-CREATE INDEX idx_work_matches ON user_book_matches(work_id);
-CREATE INDEX idx_match_score ON user_book_matches(match_score DESC);
+CREATE INDEX idx_user_matches ON matches(user_id);
+CREATE INDEX idx_work_matches ON matches(work_id);
+CREATE INDEX idx_match_score ON matches(match_score DESC);

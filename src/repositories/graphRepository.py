@@ -17,19 +17,21 @@ class GraphRepository:
         self.conn.commit()
         cur.close()
 
-    def getSimilarBooks(self, work_id) -> list[(tuple)]: 
-        """Go through all the similarity scores connected to a book using their work id
-        return all the rows in descending order (highest similiarity is first"""
+    def getSimilarBooks(self, work_id) -> list[tuple[str, float]]: 
+        """Return similar books as (other_work_id, similarity_score), highest similarity first."""
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT *
+            SELECT work_id_1, work_id_2, similarity_score
             FROM book_similarity
             WHERE work_id_1 = %s OR work_id_2 = %s
             ORDER BY similarity_score DESC;
         """, (work_id, work_id))
         result = cur.fetchall()
         cur.close()
-        return result
+        return [
+            (work_id_2 if work_id_1 == work_id else work_id_1, similarity_score)
+            for work_id_1, work_id_2, similarity_score in result
+        ]
 
 
     #user similarity graph
@@ -46,19 +48,21 @@ class GraphRepository:
         self.conn.commit()
         cur.close()
 
-    def getSimilarUsers(self, user_id) -> list[(tuple)]:
-        """Go through all the similarity scores connected to a user using
-        return all the rows in descending order (highest similiarity is first"""
+    def getSimilarUsers(self, user_id) -> list[tuple[int, float]]:
+        """Return similar users as (other_user_id, similarity_score), highest similarity first."""
         cur = self.conn.cursor()
         cur.execute("""
-            SELECT *
+            SELECT user_id_1, user_id_2, similarity_score
             FROM user_similarity
             WHERE user_id_1 = %s OR user_id_2 = %s
             ORDER BY similarity_score DESC;
         """, (user_id, user_id))
         result = cur.fetchall()
         cur.close()
-        return result
+        return [
+            (user_id_2 if user_id_1 == user_id else user_id_1, similarity_score)
+            for user_id_1, user_id_2, similarity_score in result
+        ]
     
     #TODO: Optimise and simplify this method
     #subject graph

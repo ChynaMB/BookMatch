@@ -1,17 +1,17 @@
-from src.dtos.book import Book
+from src.models.book import Book
 
 class BooksRepository:
     def __init__(self, conn):
         self.conn = conn
 
-    def insertBook(self, work_id, title, subtitle=None, description=None, isbn=None, isbn13=None):
+    def insertBook(self, work_id, title, subtitle=None, description=None, isbn10=None, isbn13=None):
         """add a book to the libary only if it's work_id does not already exist (to avoid dublicates)"""
         cur = self.conn.cursor()
         cur.execute("""
-            INSERT INTO books (work_id, title, subtitle, description, isbn, isbn13)
+            INSERT INTO books (work_id, title, subtitle, description, isbn10, isbn13)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (work_id) DO NOTHING;
-        """, (work_id, title, subtitle, description, isbn, isbn13))
+        """, (work_id, title, subtitle, description, isbn10, isbn13))
         self.conn.commit()
         cur.close()
 
@@ -20,12 +20,12 @@ class BooksRepository:
         cur = self.conn.cursor()
         cur.execute("""
             UPDATE books
-            SET average_rating = ?, 
-                rating_update_date = ?, 
-            WHERE work_id = ?
+            SET average_rating = %s, 
+                rating_update_date = %s
+            WHERE work_id = %s
             AND (
                 rating_update_date IS NULL 
-                OR rating_update_date < ?
+                OR rating_update_date < %s
             )
         """, (average_rating, rating_update_date, work_id, rating_update_date))
         self.conn.commit()
@@ -47,7 +47,7 @@ class BooksRepository:
             SELECT average_rating
             FROM books
             WHERE work_id = %s;
-        """,(work_id))
+        """, (work_id,))
         result = cur.fetchone()
         cur.close()
         return result[0] if result else None
@@ -103,18 +103,25 @@ class BooksRepository:
     def resultToBook(self, result):
         if result is None:
             return None
-        else:
-            work_id=result[0],
-            title=result[1],
-            subtitle=result[2],
-            description=result[3],
-            isbn10=result[4],
-            isbn13=result[5],
-            average_rating=result[6],
-            rating_update_date=result[7]
-            rating_count=result[8]
-        
-            book = Book(work_id, title, subtitle, description, isbn10, isbn13, average_rating, rating_update_date, rating_count)
-    
-        return book
-           
+
+        work_id = result[0]
+        title = result[1]
+        subtitle = result[2]
+        description = result[3]
+        isbn10 = result[4]
+        isbn13 = result[5]
+        average_rating = result[6]
+        rating_update_date = result[7]
+        rating_count = result[8]
+
+        return Book(
+            work_id,
+            title,
+            subtitle,
+            description,
+            isbn10,
+            isbn13,
+            average_rating,
+            rating_update_date,
+            rating_count,
+        )
