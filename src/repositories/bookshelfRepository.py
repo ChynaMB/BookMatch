@@ -51,3 +51,15 @@ class BookshelfRepository:
             books.append(book)
         cur.close()
         return books
+    
+    def whichShelfIsBookOnForUser(self, user_id, work_id):
+        """return the name of the shelf a book is on for a user (e.g. 'to-read', 'currently-reading', 'read')"""
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT shelf
+            FROM user_books
+            WHERE user_id = %s AND work_id = %s;
+        """, (user_id, work_id))
+        result = cur.fetchone()
+        cur.close()
+        return result[0] if result else None

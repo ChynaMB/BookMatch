@@ -1,4 +1,5 @@
-from src.library import Library
+from src.database.library import Library
+from src.models.book import Book
 from src.services.csvImporter import CSVimporter
 from src.services.dataAnalyser import DataAnalyser
 from src.repositories.graphRepository import GraphRepository
@@ -10,13 +11,13 @@ from src.repositories.libraryDataRepository import LibraryDataRepository
 from src.repositories.matchesRepository import MatchesRepository
 import networkx as nx
 
- 
 class Recommender:    
-    def __init__(self, csv_path = None):
-        self.validateCSVPath(csv_path)
+    def __init__(self, file_contents = None):
+        self.file_contents = file_contents
+        self.validateFileContents()
 
         self.library = Library()
-        self.csvImporter = CSVimporter(self.library.conn, csv_path)
+        self.csvImporter = CSVimporter(self.library.conn, file_contents)
         self.userID = self.csvImporter.getUserID()
         self.dataAnalyser = DataAnalyser(
             self.library.conn, self.userID, self.fiveStarWeight, self.fourStarWeight, self.ceilingFactor)
@@ -44,12 +45,14 @@ class Recommender:
         self.averageRatingBaseline = 3.8
         self.minimumAverageRating = 3.0
 
+
         self.baseNumberOfMatches = 100 #number of matches to initially generate using embeddings and graohs
         self.finalNumberOfMatches = 10 #number of matches to return to user
         
-        self.matches = {} #dictionary to store final matches (key: workID, value: match score)
+        self.matches = {} #dictionary to store initial batch of matches (key: book, value: match score)
         self.finalMatches = []
 
+    #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
     def recommend(self):
         #import the user's csv data and add it to the library database
         self.csvImporter.importCSV()
@@ -67,7 +70,7 @@ class Recommender:
         self.useSubjectGraph()
 
         #reduce number of matches
-        self.matches = dict(self.reduceMatches(self.baseNumberOfMatches))
+        self.finalMatches = dict(self.reduceMatches(self.baseNumberOfMatches))
 
         #increase the match score of books written by authors the user likes
         self.useLikedAuthors()
@@ -79,16 +82,28 @@ class Recommender:
         self.addMatches()
 
         #get final matches
-        self.finalMatches = self.getFinalMatches(self.finalNumberOfMatches)
+        userMatches = self.getFinalMatches(self.finalNumberOfMatches)
+
+        return userMatches #list of tuples (book, match score)
      
-    #TODO: add better error handling and edge case handling (e.g. if user has no five star ratings, if there are no matches that meet the similarity threshold, if the CSV is in an incorrect format etc.)
-    def validateCSVPath(self, csv_path):
-        if csv_path is None:
-            raise ValueError("CSV path cannot be None.")
+    #TODO: add a check to make sure file is a csv
+    def validateFileContents(self):
+        if not self.file_contents:
+            raise ValueError("File contents cannot be empty.")
+
+    def isValidReccomendation(self, workID):
+        """return true if the book is not in the 'Read' shelf or 'Did Not Finish' shelf and false otherwise"""
+        shelf = self.bookshelfRepo.whichShelfIsBookOnForUser(self.dataAnalyser.userID, workID)
+        return shelf not in ['Read', 'Did Not Finish']
+
 
     #STEP 1 - similar books   
     #fill the matches dictionary with matches and their match scores (key: workID, value: match score)
     #these matches should meet the minimum similarity threshold 
+    #TODO: optimise this method by reducing the number of database calls and simplifying the logic. 
+        #For example, instead of getting the similar books for each book in the user's bookshelf and then filtering them, 
+        #we could get all similar books for all books in the user's bookshelf in one query and then filter them in memory. 
+        #This would reduce the number of database calls and simplify the logic.
     def useSimilarBooks(self):
         """Get a list of similar books based on the user's five and four star bookshelves. 
         The top matches that meet the minimum similarity threshold are added to the matches dictionary.
@@ -96,24 +111,28 @@ class Recommender:
         based on the weights set in the constructor."""
         
         for book in self.dataAnalyser.fiveStarBookshelf :
-            similarBooks = self.graphRepo.getSimilarBooks(book.getWorkID())
-            top50SimilarBooks = similarBooks[:self.baseNumberOfMatches] #get the top 50 similar books
-            for similarBook, similarityScore in top50SimilarBooks:
-                if similarityScore >= self.minimumBookSimilarityThreshold:
-                    if similarBook in self.matches:
-                        self.matches[similarBook] += similarityScore * self.fiveStarWeight
-                    else:
+            similarBooksWorkIDS = self.graphRepo.getSimilarBooks(book.getWorkID())
+            for WorkID, similarityScore in similarBooksWorkIDS:
+                if similarityScore >= self.minimumBookSimilarityThreshold and self.isValidReccomendation(WorkID):
+                    similarBook = self.booksRepo.getBookByWorkID(WorkID)
+                    if similarBook not in self.matches:
                         self.matches[similarBook] = similarityScore * self.fiveStarWeight
+                    else:
+                        break #dont include the same book multiple times
+                else:
+                    break #books in order of similarity, so break once we reach a book that doesnt meet the similarity threshold
 
         for book in self.dataAnalyser.fourStarBookshelf :
-            similarBooks = self.graphRepo.getSimilarBooks(book.getWorkID())
-            top50SimilarBooks = similarBooks[:self.baseNumberOfMatches] #get the top 50 similar books
-            for similarBook, similarityScore in top50SimilarBooks:
-                if similarityScore >= self.minimumBookSimilarityThreshold:
-                    if similarBook in self.matches:
-                        self.matches[similarBook] += similarityScore * self.fourStarWeight
-                    else:
+            similarBooksWorkIDS = self.graphRepo.getSimilarBooks(book.getWorkID())
+            for WorkID, similarityScore in similarBooksWorkIDS:
+                if similarityScore >= self.minimumBookSimilarityThreshold and self.isValidReccomendation(WorkID):
+                    similarBook = self.booksRepo.getBookByWorkID(WorkID)
+                    if similarBook not in self.matches:
                         self.matches[similarBook] = similarityScore * self.fourStarWeight
+                    else:
+                        break
+                else:
+                    break
 
 
     #STEP 2 - similar users
@@ -129,6 +148,7 @@ class Recommender:
         the more similar the user, the higher the increase in match score 
         (e.g. if a user has a similarity score of 0.8, increase the match score of their highly rated books by 0.8*userSimilarityWeight)"""
         similarUsers = self.graphRepo.getSimilarUsers(self.userID)
+        lowestBookSimilarityScore = min(self.matches.values(), default=0)
         for similarUser, userSimilarityScore in similarUsers:
             
             similarUserID = similarUser[0] if similarUser[0] != self.userID else similarUser[1] #get the ID of the similar user (similarUser is a tuple of (user_id_1, user_id_2))
@@ -136,23 +156,21 @@ class Recommender:
             if userSimilarityScore < self.minimumUserSimilarityThreshold:
                 continue
 
-            lowestBookSimilarityScore = min(self.matches.values(), default=0)
-
             #for books that the similar user has rated 5 stars, increase their match score by a certain amount (relative to the user similarity score and the five star weight)
             highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,5)
             for book in highlyRatedBooks:
-                if book.getWorkID() in self.matches:
-                    self.matches[book.getWorkID()] += userSimilarityScore * self.fiveStarWeight 
+                if book in self.matches:
+                    self.matches[book] += userSimilarityScore * self.fiveStarWeight 
                 else:
-                    self.matches[book.getWorkID()] = lowestBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
+                    self.matches[book] = lowestBookSimilarityScore + (userSimilarityScore * self.fiveStarWeight)
             
             #calculate match score based on the books the similar user has rated 4 stars (relative to the user similarity score and the four star weight)
             highlyRatedBooks = self.bookshelfRepo.getRatedBooksForUser(similarUserID,4)
             for book in highlyRatedBooks:
-                if book.getWorkID() in self.matches:
-                    self.matches[book.getWorkID()] += userSimilarityScore * self.fourStarWeight 
+                if book in self.matches:
+                    self.matches[book] += userSimilarityScore * self.fourStarWeight 
                 else:
-                    self.matches[book.getWorkID()] = lowestBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
+                    self.matches[book] = lowestBookSimilarityScore + (userSimilarityScore * self.fourStarWeight)
 
     #STEP 3 - subject graph analysis
     #compare user subject graph to the subjects of each book in the matches
@@ -202,17 +220,22 @@ class Recommender:
     #we have used the data to find the best matches
     #any other thing done to the matches is to diffentiate between them
     #not to find different matches
-    def reduceMatches(self, numOfMAtches):
+    def reduceMatches(self, numOfMAtches) -> list:
         sortedMatches = sorted(self.matches.items(), key=lambda x: x[1], reverse=True)
-        return sortedMatches[:numOfMAtches]
+        return sortedMatches[:numOfMAtches] #list of tuples (book, match score)
         
         
     #STEP 5 - liked authors
     #then look at the authors of the matches and if any of them are in the user's liked authors, increase their match score by a certain amount (relative to the author's occurence in the liked authors)
     def useLikedAuthors(self):
         likedAuthors = self.dataAnalyser.likedAuthors
-        for workID in self.matches.keys():
+        for i in range(len(self.finalMatches)):
+            book = self.finalMatches[i][0]
+            matchScore = self.finalMatches[i][1]
+
+            workID = book.getWorkID()
             authors = self.authorRepo.getBookAuthors(workID)
+
             maxWeight = -1
             for author in authors:
                 if author not in likedAuthors:
@@ -220,8 +243,8 @@ class Recommender:
                 maxWeight = max(maxWeight,likedAuthors[author])
             if maxWeight == -1:
                 continue
-            self.matches[workID] += maxWeight
-                   
+            self.finalMatches[i] = (book, matchScore + maxWeight)
+
     #STEP 6 - rating analysis
     #then look at the average rating of the matches and 
     #if they are above a certain threshold (e.g. 4), increase their match score by a certain amount 
@@ -236,9 +259,12 @@ class Recommender:
         baselineRating = max(self.averageRatingBaseline, averageRatingInLibrary)
 
         toBeDeleted = []
-        for workID, matchScore in self.matches.items():
+        for i in range(len(self.finalMatches)):
+            book, matchScore = self.finalMatches[i]
+            workID = book.getWorkID()
             rating = self.booksRepo.getAverageBookRating(workID)
             if not rating:
+                toBeDeleted.append(workID)
                 continue
 
             if rating < self.minimumAverageRating:
@@ -249,26 +275,30 @@ class Recommender:
                 continue
 
             difference = rating - baselineRating
-            self.matches[workID] = matchScore + (self.ratingWeight * difference)
-
+            self.finalMatches[i] = (book, matchScore + (self.ratingWeight * difference))
+            
         for workID in toBeDeleted:
-            del self.matches[workID]
+            self.finalMatches = [match for match in self.finalMatches if match[0].getWorkID() != workID]
 
     #STEP 7 - add user matches to the database
     def addMatches(self):
-        matches = [(self.userID, workID, matchScore) for workID, matchScore in self.matches.items()]
+        matches = [(self.userID, book.getWorkID(), matchScore) for book, matchScore in self.finalMatches]
         self.matchesRepository.insertMatches(matches)
 
     #STEP 8 - get the final matches
-    def getFinalMatches(self, numOfMAtches):
+    def getFinalMatches(self) -> list:
         finalMatches = self.reduceMatches(self.finalNumberOfMatches)
         userMatches = []
-        for workID, matchScore in finalMatches:
-            #bookName = get the book name
-            #authorNames = get the author names
-            #percentageScore = get the match score as a percentage
-            #userMatches.append((bookName,authorNames,percentageScore))
+        for book, matchScore in finalMatches:
+            dict = {}
+            dict["title"] = book.getTitle()
+            dict["authors"] = []
+            for author in self.authorRepo.getBookAuthors(book.getWorkID()):
+                dict["authors"].append(author.getName())
+            dict["matchScore"] = matchScore
+            userMatches.append(dict)
         return userMatches
+
         
    
 

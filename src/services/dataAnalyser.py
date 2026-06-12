@@ -25,10 +25,15 @@ class DataAnalyser:
         self.fourStarWeight = fourStarWeight
         self.ceilingFactor = ceilingFactor #number of standard deviations above the mean to set as the ceiling for node frequencies and edge weights in the subject graph
 
-        self.fiveStarBookshelf = []
+        self.fiveStarBookshelf = [] #bookshelves store objects of type Book
         self.fourStarBookshelf = []
         self.likedAuthors = {} #key: author name, value: weighted occurence based on author's books in five star and four star bookshelves
         self.subjectGraph = None #type: nx.Graph
+
+    def findRatedBooks(self):
+        """get a list of workIDs for the books the user has rated 4 or 5 stars"""
+        self.fiveStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,5)
+        self.fourStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,4)
 
     def findLikedAuthors(self):
         """Return a dictionairy of liked authors based on the frequency of authors in the 4 and 5 star ratings"""
@@ -48,11 +53,6 @@ class DataAnalyser:
                 authorFrequency[author] = 1
 
         self.likedAuthors = authorFrequency
-
-    def findRatedBooks(self):
-        """get a list of workIDs for the books the user has rated 4 or 5 stars"""
-        self.fiveStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,5)
-        self.fourStarBookshelf = self.bookshelfRepo.getRatedBooksForUser(self.userID,4)
 
     #TODO: Clean up and optimise this method - especially the if-else statements in the loops
     #TODO: Also consider edge cases (e.g. no books, all books have the same subjects, etc.) and how to handle them.
@@ -115,11 +115,12 @@ class DataAnalyser:
         """analyse the user's data to create a user profile with a subject graph and vector embedding"""
 
         print("analysing user data...")
-        self.findLikedAuthors()
-        print("liked authors have been identified")
 
         self.findRatedBooks()
         print("rated books have been identified")
+
+        self.findLikedAuthors()
+        print("liked authors have been identified")
 
         embedder = Embedder(
             self.userID,
@@ -133,4 +134,5 @@ class DataAnalyser:
 
         self.createSubjectGraph()
         print("subject graph has been created")
+        
         print("finished analysing user data")

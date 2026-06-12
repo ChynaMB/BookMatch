@@ -1,16 +1,16 @@
-
 from src.repositories.usersRepository import UsersRepository
 from src.repositories.booksRepository import BooksRepository
 from src.repositories.authorsRepository import AuthorsRepository
 from src.repositories.bookshelfRepository import BookshelfRepository
 from src.services.bookImporter import BookImporter
+import io
 import pandas as pd
-import requests
 
 class CSVimporter:
-    def __init__(self, conn, path):
+    def __init__(self, conn, file_contents):
         self.conn = conn
-        self.path = path
+        self.file_contents = file_contents
+        self.dataFrame = None
         self.user_id = None
         self.isbns = []
         self.mostRecentDate = None
@@ -21,7 +21,7 @@ class CSVimporter:
         self.user_id = UsersRepository(self.conn).createUser()
         print(f"Created new user with ID: {self.user_id}")
 
-        self.getISBNSAndMostRecentDate(self.path)
+        self.getISBNSAndMostRecentDate()
         print(f"Extracted {len(self.isbns)} ISBNs from CSV.")
         print(f"Most recent date in CSV: {self.mostRecentDate}")
 
@@ -35,14 +35,18 @@ class CSVimporter:
 
     #TODO: accomodate for missing data
     #TODO: make more effcient
-
-    def getISBNSAndMostRecentDate(self, df):
-        df = pd.read_csv(self.path)
+    
+    #TODO: make more effcient by only iterating through the dataframe once and doing bulk inserts/updates instead of one at a time
+    #TODO: exception handling for missing columns or unexpected data formats in the CSV
+    #TODO: exception handling for if data frame creation fails due to malformed CSV
+    def getISBNSAndMostRecentDate(self):
+        while self.dataFrame is None:
+            self.dataFrame = pd.read_csv(io.StringIO(self.file_contents))
 
         isbns = []
         most_recent_date = None
 
-        for _, row in df.iterrows():
+        for _, row in self.dataFrame.iterrows():
             isbn10 = row.get("ISBN")
             isbn13 = row.get("ISBN13")
             isbns.append((isbn10,isbn13))
@@ -60,9 +64,7 @@ class CSVimporter:
         authorsRepo = AuthorsRepository(self.conn)
         bookshelfRepo = BookshelfRepository(self.conn)
 
-        df = pd.read_csv(self.path)
-
-        for _, row in df.iterrows():
+        for _, row in self.dataFrame.iterrows():
             title = row["Title"]
             author = row.get("Author")
             additional_authors = str(row.get("Additional Authors")).split(",")

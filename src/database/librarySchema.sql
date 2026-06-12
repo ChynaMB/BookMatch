@@ -8,7 +8,7 @@ CREATE TABLE library_data (
     average_books_rating FLOAT,
     average_books_rating_count REAL,
 
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- users
