@@ -3,7 +3,6 @@ from database.library import Library
 class EmbeddingRepository:
     def __init__(self, library: Library):
         self.library = library
-        self.conn = library.conn
 
     def addBookEmbedding(self, work_id, embedding):
         """add a book embedding to the database only if an embedding for the book does not already exist"""

@@ -15,12 +15,12 @@ and to identify liked authors based on the user's ratings.
 """
 
 class DataAnalyser:
-    def __init__(self, conn, user_id, fiveStarWeight, fourStarWeight, ceilingFactor):
+    def __init__(self, library, user_id, fiveStarWeight, fourStarWeight, ceilingFactor):
         self.userID = user_id
-        self.bookshelfRepo = BookshelfRepository(conn)
-        self.embeddingRepo = EmbeddingRepository(conn)
-        self.graphRepo = GraphRepository(conn)
-        self.subjectsRepo = SubjectsRepository(conn)
+        self.bookshelfRepo = BookshelfRepository(library)
+        self.embeddingRepo = EmbeddingRepository(library)
+        self.graphRepo = GraphRepository(library)
+        self.subjectsRepo = SubjectsRepository(library)
         
         self.fiveStarWeight = fiveStarWeight
         self.fourStarWeight = fourStarWeight

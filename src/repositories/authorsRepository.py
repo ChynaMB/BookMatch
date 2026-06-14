@@ -3,7 +3,6 @@ from database.library import Library
 class AuthorsRepository:
     def __init__(self, library: Library):
         self.library = library
-        self.conn = library.conn
 
     def getOrCreateAuthor(self, author_name):
         existing = self.library.fetchone("SELECT author_id FROM authors WHERE name = %s;", (author_name,))

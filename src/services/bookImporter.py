@@ -6,12 +6,12 @@ import requests
 import time
 
 class BookImporter:
-    def __init__(self, conn, isbns: list):
-        self.conn = conn
+    def __init__(self, library, isbns: list):
+        self.library = library
         self.openLibraryURL = "https://openlibrary.org"
-        self.booksRepo = BooksRepository(self.conn)
-        self.subjectsRepo = SubjectsRepository(self.conn)
-        self.embedder = Embedder(self.conn)
+        self.booksRepo = BooksRepository(self.library)
+        self.subjectsRepo = SubjectsRepository(self.library)
+        self.embedder = Embedder(self.library)
         self.isbns = isbns
         self.works = {}
 
@@ -91,7 +91,7 @@ class BookImporter:
                     continue
                 author_data = author_response.json()
                 author_name = author_data.get("name", "Unknown Author")
-                author_id = AuthorsRepository(self.conn).getOrCreateAuthor(author_name)
+                author_id = AuthorsRepository(self.library).getOrCreateAuthor(author_name)
 
             time.sleep(1)  #sleep for a bit to avoid hitting API rate limits (1 second)   
 

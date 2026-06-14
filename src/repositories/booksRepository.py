@@ -4,7 +4,6 @@ from database.library import Library
 class BooksRepository:
     def __init__(self, library: Library):
         self.library = library
-        self.conn = library.conn
 
     def insertBook(self, work_id, title, subtitle=None, description=None, isbn10=None, isbn13=None):
         """add a book to the libary only if it's work_id does not already exist (to avoid dublicates)"""

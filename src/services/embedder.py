@@ -4,9 +4,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 class Embedder:
-    def __init__(self, conn, userID = None, fiveStarWeight = None, fourStarWeight = None, 
+    def __init__(self, library, userID = None, fiveStarWeight = None, fourStarWeight = None, 
                  fiveStarBookshelf = None, fourStarBookshelf = None):
-        self.embeddingRepo = EmbeddingRepository(conn)
+        self.embeddingRepo = EmbeddingRepository(library)
         self.userID = userID
         self.fiveStarWeight = fiveStarWeight
         self.fourStarWeight = fourStarWeight

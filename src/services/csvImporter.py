@@ -7,8 +7,8 @@ import io
 import pandas as pd
 
 class CSVimporter:
-    def __init__(self, conn, file_contents):
-        self.conn = conn
+    def __init__(self, library, file_contents):
+        self.library = library
         self.file_contents = file_contents
         self.dataFrame = None
         self.user_id = None
@@ -18,14 +18,14 @@ class CSVimporter:
     def getUserID(self): return self.user_id
 
     def importCSV(self):
-        self.user_id = UsersRepository(self.conn).createUser()
+        self.user_id = UsersRepository(self.library).createUser()
         print(f"Created new user with ID: {self.user_id}")
 
         self.getISBNSAndMostRecentDate()
         print(f"Extracted {len(self.isbns)} ISBNs from CSV.")
         print(f"Most recent date in CSV: {self.mostRecentDate}")
 
-        bookImporter = BookImporter(self.conn, self.isbns)
+        bookImporter = BookImporter(self.library, self.isbns)
         print("Fetching work IDs for ISBNs and adding new books to the library...")
         bookImporter.importBooks()
         print("Finished importing books from CSV.")
@@ -60,9 +60,9 @@ class CSVimporter:
         self.mostRecentDate = most_recent_date
 
     def loadCSV(self):
-        booksRepo = BooksRepository(self.conn)
-        authorsRepo = AuthorsRepository(self.conn)
-        bookshelfRepo = BookshelfRepository(self.conn)
+        booksRepo = BooksRepository(self.library)
+        authorsRepo = AuthorsRepository(self.library)
+        bookshelfRepo = BookshelfRepository(self.library)
 
         for _, row in self.dataFrame.iterrows():
             title = row["Title"]
@@ -114,5 +114,5 @@ class CSVimporter:
                 shelf = shelf
             )
 
-        self.conn.close()
+        self.library.close()
     

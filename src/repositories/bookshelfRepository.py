@@ -4,7 +4,6 @@ from src.repositories.booksRepository import BooksRepository
 class BookshelfRepository:
     def __init__(self, library: Library):
         self.library = library
-        self.conn = library.conn
 
     def upsertBookIntoUserBookshelf(self, user_id, work_id, rating=None, date_added=None, review=None, read_count=None, shelf=None):
         self.library.execute("""
@@ -41,7 +40,7 @@ class BookshelfRepository:
             WHERE ub.user_id = %s AND ub.rating = %s;
         """, (user_id, rating))
         books = []
-        book_repo = BooksRepository(self.conn)
+        book_repo = BooksRepository(self.library)
         for row in result:
             books.append(book_repo.resultToBook(row))
         return books

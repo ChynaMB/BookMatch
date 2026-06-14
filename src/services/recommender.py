@@ -39,13 +39,13 @@ class Recommender:
         self.dataAnalyser = DataAnalyser(
             self.library.conn, self.userID, self.fiveStarWeight, self.fourStarWeight, self.ceilingFactor)
         
-        self.graphRepo = GraphRepository(self.library.conn)
-        self.bookshelfRepo = BookshelfRepository(self.library.conn)
-        self.subjectsRepo = SubjectsRepository(self.library.conn)
-        self.authorRepo = AuthorsRepository(self.library.conn)
-        self.booksRepo = BooksRepository(self.library.conn)
-        self.libraryDataRepo = LibraryDataRepository(self.library.conn)
-        self.matchesRepository = MatchesRepository(self.library.conn)
+        self.graphRepo = GraphRepository(self.library)
+        self.bookshelfRepo = BookshelfRepository(self.library)
+        self.subjectsRepo = SubjectsRepository(self.library)
+        self.authorRepo = AuthorsRepository(self.library)
+        self.booksRepo = BooksRepository(self.library)
+        self.libraryDataRepo = LibraryDataRepository(self.library)
+        self.matchesRepository = MatchesRepository(self.library)
 
         self.matches = {} # key: work_id, value: match score
         self.finalMatches = []

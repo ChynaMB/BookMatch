@@ -4,7 +4,6 @@ from database.library import Library
 class GraphRepository:
     def __init__(self, library: Library):
         self.library = library
-        self.conn = library.conn
         
     # book similarity graph
     def upsertBookSimilarity(self, w1, w2, score):

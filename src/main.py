@@ -10,7 +10,7 @@ class MatchResponse(BaseModel):
     authors: list[str]
     matchScore: float    
 
-jobs = {} #Temporary in-memory store —> holds results while they're being processed
+jobs = {} #Temporary in-memory storage —> holds results while they're being processed
 
 @app.post("/upload_csv")
 async def upload_csv(file: UploadFile, background_tasks: BackgroundTasks):
@@ -19,22 +19,37 @@ async def upload_csv(file: UploadFile, background_tasks: BackgroundTasks):
     try:
         fileContent = await file.read()
         fileContent = fileContent.decode("utf-8")
-        job_id = str(uuid.uuid4())  # generates a unique ID e.g. "a3f4c2d1-..."
-        jobs[job_id] = {"status": "processing", "results": None}
+
+        job_id = str(uuid.uuid4())
+
+        jobs[job_id] = {
+            "status": "processing", 
+            "progress": 0,
+            "results": None,
+            "error": None}
+        
         background_tasks.add_task(run_recommender, job_id, fileContent)
+
+        return {"job_id": job_id}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
-    return {"job_id": job_id, "status": "processing"}
     
 def run_recommender(job_id: str, fileContent: str):
     try:
         recommender = Recommender(fileContent)
+        jobs[job_id]["progress"] = 60
+
         matches = recommender.recommend()
-        jobs[job_id] = {"status": "done", "results": matches}
+        
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 100
+        jobs[job_id]["result"] = matches
+
     except Exception as e:
-        jobs[job_id] = {"status": "failed", "error": str(e)}
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
 
 @app.get("/results/{job_id}", response_model=list[MatchResponse])
 async def get_results(job_id: str):
@@ -44,7 +59,8 @@ async def get_results(job_id: str):
     job = jobs[job_id]
 
     if job["status"] == "processing":
-        raise HTTPException(status_code=202, detail="Still processing, try again soon")
+        progress = job["progress"]
+        raise HTTPException(status_code=202, detail=f"Job is still processing: {progress}% complete")
     
     if job["status"] == "failed":
         raise HTTPException(status_code=500, detail=job["error"])
