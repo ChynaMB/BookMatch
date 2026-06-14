@@ -1,85 +1,74 @@
+from database.library import Library
+
 class EmbeddingRepository:
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, library: Library):
+        self.library = library
+        self.conn = library.conn
 
     def addBookEmbedding(self, work_id, embedding):
         """add a book embedding to the database only if an embedding for the book does not already exist"""
         if embedding is not None:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.library.execute("""
                 INSERT INTO book_embeddings (work_id, embedding)
                 VALUES (%s, %s)
                 ON CONFLICT (work_id)
                 DO NOTHING;
             """, (work_id, embedding))
-            self.conn.commit()
-            cur.close()
 
     def addUserEmbedding(self, user_id, embedding):
         """add a user embedding to the database only if an embedding for the user does not already exist"""
         if embedding is not None:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.library.execute("""
                 INSERT INTO user_embeddings (user_id, embedding)
                 VALUES (%s, %s)
                 ON CONFLICT (user_id)
                 DO NOTHING;
             """, (user_id, embedding))
-            self.conn.commit()
-            cur.close()
+           
 
     def upsertSimilarityScore(self, type,id1, id2, similarityScore):
         """upsert a similarity score between two books or two user profiles in the database"""
-        cur = self.conn.cursor()
         if type == 'book':
-            cur.execute("""
+            self.library.execute("""
                 INSERT INTO book_similarity (work_id_1, work_id_2, similarity_score)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (work_id_1, work_id_2)
                 DO UPDATE SET similarity_score = EXCLUDED.similarity_score;
             """, (id1, id2, similarityScore))
         elif type == 'user':
-            cur.execute("""
+            self.library.execute("""
                 INSERT INTO user_similarity (user_id_1, user_id_2, similarity_score)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (user_id_1, user_id_2)
                 DO UPDATE SET similarity_score = EXCLUDED.similarity_score;
             """, (id1, id2, similarityScore))
-        self.conn.commit()
-        cur.close()
 
-    def getEmbedding(self, type, id) -> list:
+    def getEmbedding(self, type, id):
         """get a book or user embedding from the database"""
-        cur = self.conn.cursor()
         if type == 'book':
-            cur.execute("""
+            result = self.library.fetchone("""
                 SELECT embedding FROM book_embeddings
                 WHERE work_id = %s;
             """, (id,))
         elif type == 'user':
-            cur.execute("""
+            result = self.library.fetchone("""
                 SELECT embedding FROM user_embeddings
                 WHERE user_id = %s;
             """, (id,))
-        result = cur.fetchone()
-        cur.close()
-        return result[0]
-    
+        return result[0] if result else None
+
     def getAllEmbeddings(self, type) -> dict:
         """get all book or all user embeddings from the database
         returns a dictionary of id: embedding pairs"""
-        cur = self.conn.cursor()
         if type == 'book':
-            cur.execute("""
+            result = self.library.fetchall("""
                 SELECT work_id, embedding FROM book_embeddings;
             """)
         elif type == 'user':
-            cur.execute("""
+            result = self.library.fetchall("""
                 SELECT user_id, embedding FROM user_embeddings;
             """)
-        results = cur.fetchall()
-        cur.close()
-        return {result[0]: result[1] for result in results}
+        return {result[0]: result[1] for result in result} if result else {}
 
 #when updating an embedding, we want to update the created_at timestamp 
 #we also have to update the similarity scores in the graph repository because they will be based on the old embedding, 

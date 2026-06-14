@@ -1,18 +1,14 @@
+from database.library import Library
+
 class UsersRepository:
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, library: Library):
+        self.library = library
 
     def createUser(self):
-        cur = self.conn.cursor()
-        cur.execute("INSERT INTO users DEFAULT VALUES RETURNING user_id;")
-        user_id = cur.fetchone()[0]
-        self.conn.commit()
-        cur.close()
-        return user_id
+        result = self.library.fetchone("INSERT INTO users DEFAULT VALUES RETURNING user_id;")
+        return result[0] if result else None
 
-    def getUser(self, user_id):
-        cur = self.conn.cursor()
-        cur.execute("SELECT * FROM users WHERE user_id = %s;", (user_id,))
-        result = cur.fetchone()
-        cur.close()
-        return result
+    def getUserID(self, user_id):
+        result = self.library.fetchone("SELECT * FROM users WHERE user_id = %s;", (user_id,))
+        return result if result else None
+    

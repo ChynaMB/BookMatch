@@ -1,42 +1,33 @@
+from database.library import Library
+
 class AuthorsRepository:
-    def __init__(self, conn):
-        self.conn = conn
-        
+    def __init__(self, library: Library):
+        self.library = library
+        self.conn = library.conn
+
     def getOrCreateAuthor(self, author_name):
-        cur = self.conn.cursor()
-
-        cur.execute("SELECT author_id FROM authors WHERE name = %s;", (author_name,))
-        existing = cur.fetchone()
-
+        existing = self.library.fetchone("SELECT author_id FROM authors WHERE name = %s;", (author_name,))
+        
         if existing:
-            cur.close()
             return existing[0]
 
-        cur.execute("""
+        author_id = self.library.fetchone("""
             INSERT INTO authors (name)
             VALUES (%s)
             RETURNING author_id;
         """, (author_name,))
 
-        data = cur.fetchone()
-        author_id = data[0] if data else None
-        self.conn.commit()
-        cur.close()
-        return author_id
-    
+        return author_id[0] if author_id else None
+       
     def upsertAuthorIntoBookAuthors(self, work_id, author_id):
-        cur = self.conn.cursor()
-        cur.execute("""
+        self.library.execute("""
             INSERT INTO book_authors (work_id, author_id)
             VALUES (%s, %s)
             ON CONFLICT DO NOTHING;
         """, (work_id, author_id))
-        self.conn.commit()
-        cur.close()
         
     def getBookAuthors(self, work_id):
-        cur = self.conn.cursor()
-        cur.execute("""
+        result = self.library.fetchall("""
             SELECT authors.name
             FROM authors
             JOIN book_authors
@@ -44,7 +35,6 @@ class AuthorsRepository:
             WHERE book_authors.work_id = %s;
         """, (work_id,))
 
-        author_names = [row[0] for row in cur.fetchall()]
-        cur.close()
+        author_names = [row[0] for row in result]
         return author_names
             
